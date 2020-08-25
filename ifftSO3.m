@@ -1,6 +1,7 @@
 function [ f ] = ifftSO3( F )
 
-B = size(F,1);
+B = size(F,3);
+lmax = B-1;
 
 % grid over SO(3)
 alpha = pi/B*(0:(2*B-1));
@@ -8,29 +9,21 @@ beta = pi/(4*B)*(2*(0:(2*B-1))+1);
 gamma = pi/B*(0:(2*B-1));
 
 % Wigner_d
-d = Wigner_d(beta,B-1);
+d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+for j = 1:2*B
+    d(:,:,:,j) = Wigner_d(beta(j),lmax);
+end
 
 % recover S2
 S2 = zeros(2*B,2*B-1,2*B-1);
-for j = 1:2*B-1
-    for k = 1:2*B-1
-        lmin = max(abs(j-B),abs(k-B));
-        F_jk = zeros(1,B-lmin);
-        for ii = lmin:B-1
-            try
-                F_jk(ii-lmin+1) = F{ii+1}(j-B+ii+1,k-B+ii+1);
-            catch
-                pause(1);
-            end
-        end
+for m = -lmax:lmax
+    for n = -lmax:lmax
+        lmin = max(abs(m),abs(n));
+        F_mn = reshape(F(m+lmax+1,n+lmax+1,lmin+1:lmax+1),1,[]);
         
-        for i = 1:2*B
-            d_jk_betai = zeros(1,B-lmin);
-            for ii = lmin:B-1
-                d_jk_betai(ii-lmin+1) = d{ii+1}{j-B+ii+1,k-B+ii+1}(i);
-            end
-            
-            S2(i,j,k) = sum(F_jk.*d_jk_betai);
+        for k = 1:2*B
+            d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+            S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
         end
     end
 end

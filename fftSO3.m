@@ -18,7 +18,7 @@ end
 
 w = zeros(1,2*B);
 for j = 1:2*B
-    w(j) = 2/B*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
+    w(j) = 1/(4*B^3)*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
 end
 
 % function values
@@ -32,34 +32,38 @@ for i = 1:2*B
 end
 
 % Wigner_d
-d = Wigner_d(beta,B-1);
+lmax = B-1;
+
+d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+for j = 1:2*B
+    d(:,:,:,j) = Wigner_d(beta(j),lmax);
+end
 
 % fft
-F = cell(B,1);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1);
 
-for i = 1:B
-    l = i-1;
+for l = 0:B-1
     S1 = zeros(2*B,2*l+1,2*B);
     S2 = zeros(2*B,2*l+1,2*l+1);
     
     for ii = 1:2*B
         for kk = 1:2*B
             temp = fftshift(ifft(f(:,ii,kk)));
-            S1(ii,:,kk) = temp(-l+B+1:l+B+1);
+            S1(ii,:,kk) = temp(-l+B+1:l+B+1)*(2*B);
         end
     end
     
     for ii = 1:2*B
         for jj = 1:2*l+1
             temp = fftshift(ifft(S1(ii,jj,:)));
-            S2(ii,jj,:) = temp(-l+B+1:l+B+1);
+            S2(ii,jj,:) = temp(-l+B+1:l+B+1)*(2*B);
         end
     end
     
-    F{i} = zeros(2*l+1,2*l+1);
-    for jj = 1:2*l+1
-        for kk = 1:2*l+1
-            F{i}(jj,kk) = sum(w.*S2(:,jj,kk)'.*d{i}{jj,kk});
+    for jj = -l:l
+        for kk = -l:l
+            F(jj+lmax+1,kk+lmax+1,l+1) = sum(w.*S2(:,jj+l+1,kk+l+1)'.*...
+                reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
         end
     end
 end
