@@ -8,10 +8,19 @@ beta = pi/(4*B)*(2*(0:(2*B-1))+1);
 gamma = pi/B*(0:(2*B-1));
 
 R = zeros(3,3,2*B,2*B,2*B);
+ca = cos(alpha);
+sa = sin(alpha);
+cb = cos(beta);
+sb = sin(beta);
+cg = cos(gamma);
+sg = sin(gamma);
+
 for i = 1:2*B
     for j = 1:2*B
         for k = 1:2*B
-            R(:,:,i,j,k) = expRot(alpha(i)*[0;0;1])*expRot(beta(j)*[0;1;0])*expRot(gamma(k)*[0;0;1]);
+            R(:,:,i,j,k) = [1,0,0;0,ca(i),-sa(i);0,sa(i),ca(i)]...
+                *[cb(j),0,sb(j);0,1,0;-sb(j),0,cb(j)]...
+                *[1,0,0;0,cg(k),-sg(k);0,sg(k),cg(k)];
         end
     end
 end
