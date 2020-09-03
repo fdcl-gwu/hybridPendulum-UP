@@ -29,9 +29,15 @@ else
     u = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
     
     for l = 0:lmax
-        % along e3
-        for m = -l:l
-            u(m+lmax+1,m+lmax+1,l+1,3) = -1i*m;
+        % along e1
+        for n = -l:l
+            if n > -l
+                u(n+lmax,n+lmax+1,l+1,1) = -0.5i*sqrt((l+n)*(l-n+1));
+            end
+            
+            if n < l
+                u(n+lmax+2,n+lmax+1,l+1,1) = -0.5i*sqrt((l-n)*(l+n+1));
+            end
         end
         
         % along e2
@@ -45,15 +51,9 @@ else
             end
         end
         
-        % along e1
-        for n = -l:l
-            if n > -l
-                u(n+lmax,n+lmax+1,l+1,1) = -1i*u(n+lmax,n+lmax+1,l+1,2);
-            end
-            
-            if n < l
-                u(n+lmax+2,n+lmax+1,l+1,1) = 1i*u(n+lmax+2,n+lmax+1,l+1,2);
-            end
+        % along e3
+        for m = -l:l
+            u(m+lmax+1,m+lmax+1,l+1,3) = -1i*m;
         end
     end
 end

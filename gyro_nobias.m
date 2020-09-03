@@ -88,7 +88,7 @@ for nt = 1:T*sf
     for l = 0:lmax
         for jj = -l:l
             for kk = -l:l
-                F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2)'.*...
+                F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
                     reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
             end
         end
@@ -106,7 +106,7 @@ for nt = 1:T*sf
             end
         end
         
-        F(ind,ind,l+1,nt+1) = expm(A/sf)*F(ind,ind,l+1,nt);
+        F(ind,ind,l+1,nt+1) = (expm(A/sf)*F(ind,ind,l+1,nt).').';
     end
     
     % inverse transform

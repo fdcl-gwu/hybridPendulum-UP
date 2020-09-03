@@ -55,21 +55,21 @@ F = zeros(2*lmax+1,2*lmax+1,lmax+1);
 S1 = zeros(2*B,2*B,2*B);
 for ii = 1:2*B
     for kk = 1:2*B
-        S1(ii,:,kk) = fftshift(ifft(f(:,ii,kk)))*(2*B);
+        S1(ii,:,kk) = ifftshift(ifft(f(:,ii,kk)))*(2*B);
     end
 end
 
 S2 = zeros(2*B,2*B,2*B);
 for ii = 1:2*B
     for jj = 1:2*B
-        S2(ii,jj,:) = fftshift(ifft(S1(ii,jj,:)))*(2*B);
+        S2(ii,jj,:) = ifftshift(ifft(S1(ii,jj,:)))*(2*B);
     end
 end
 
 for l = 0:lmax
     for jj = -l:l
         for kk = -l:l
-            F(jj+lmax+1,kk+lmax+1,l+1) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2)'.*...
+            F(jj+lmax+1,kk+lmax+1,l+1) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
                 reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
         end
     end
