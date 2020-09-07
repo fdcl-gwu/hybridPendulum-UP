@@ -114,36 +114,19 @@ end
 % fft for product
 FG = zeros(2*lmax+1,2*lmax+1,lmax+1);
 
-for l = 0:lmax
-    for m = -l:l
-        for n = -l:l
-            for l1 = 0:lmax
-                for l2 = 0:lmax
-                    if l<=l1+l2 && l>=abs(l1-l2)
-                        for m1 = -l1:l1
-                            m2 = m-m1;
-                            if m2>=-l2 && m2<=l2
-                                for n1 = -l1:l1
-                                    n2 = n-n1;
-                                    if n2>=-l2 && n2<=l2
-                                        colm = l^2-(l2-l1)^2+l+m;
-                                        rowm = (l1+m1)*(2*l2+1)+l2+m2;
-                                        
-                                        coln = l^2-(l2-l1)^2+l+n;
-                                        rown = (l1+n1)*(2*l2+1)+l2+n2;
-                                        
-                                        FG(m+lmax+1,n+lmax+1,l+1) = FG(m+lmax+1,n+lmax+1,l+1)+...
-                                            (2*l1+1)*(2*l2+1)/(2*l+1)*...
-                                            F(m1+lmax+1,n1+lmax+1,l1+1)*...
-                                            G(m2+lmax+1,n2+lmax+1,l2+1)*...
-                                            CG{l1+1,l2+1}(rowm+1,colm+1)*...
-                                            CG{l1+1,l2+1}(rown+1,coln+1);
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
+for l1 = 0:lmax
+    for l2 = 0:lmax
+        ind1 = -l1+lmax+1:l1+lmax+1;
+        ind2 = -l2+lmax+1:l2+lmax+1;
+        
+        A = CG{l1+1,l2+1}.'*kron(F(ind1,ind1,l1+1),G(ind2,ind2,l2+1))*CG{l1+1,l2+1};
+        A = A*(2*l1+1)*(2*l2+1);
+        
+        for l = 0:lmax
+            if l>=abs(l1-l2) && l<=l1+l2
+                indA = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                indFG = -l+lmax+1:l+lmax+1;
+                FG(indFG,indFG,l+1) = FG(indFG,indFG,l+1)+A(indA,indA)/(2*l+1);
             end
         end
     end
