@@ -13,6 +13,7 @@
 \newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
 \newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
 \newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
 
 \title{\vspace{-4ex}\textbf{Product rule for FFT on SO(3)\vspace{-4ex}}}
 \date{}
@@ -24,8 +25,8 @@
 Let $f,g\in L^2(\SO)$, $F_{m,n}^l$, $G_{m,n}^l$ be the corresponding Fourier coefficients for $0\leq l \leq B-1$ and $-l\leq m,n\leq l$.
 Then we have the approximation
 \begin{align*}
-	f(R) = \sum_{l=0}^{B-1} \sum_{m,n=-l}^l (2l+1) F_{m,n}^l D_{m,n}^l(R) \\
-	g(R) = \sum_{l=0}^{B-1} \sum_{m,n=-l}^l (2l+2) G_{m,n}^l D_{m,n}^l(R).
+	f(R) &= \sum_{l=0}^{B-1} \sum_{m,n=-l}^l (2l+1) F_{m,n}^l D_{m,n}^l(R) \\
+	g(R) &= \sum_{l=0}^{B-1} \sum_{m,n=-l}^l (2l+1) G_{m,n}^l D_{m,n}^l(R).
 \end{align*}
 The product of $f$ and $g$ has approximation
 \begin{align*}
@@ -33,17 +34,15 @@ The product of $f$ and $g$ has approximation
 	&= \sum_{l_1=0}^{B-1} \sum_{l_2=0}^{B-1} (2l_1+1)(2l_2+1) \tr{F^{l_1} \otimes G^{l_2} \cdot \left(D^{l_1}(R) \otimes D^{l_2}(R)\right)^T} \\
 	&= \sum_{l_1=0}^{B-1} \sum_{l_2=0}^{B-1} (2l_1+1)(2l_2+1) \tr{C_{l_1,l_2}^T F^{l_1} \otimes G^{l_2} C_{l_1,l_2} \bigoplus_{l=\abs{l_1-l_2}}^{l_1+l_2} D^l(R)^T},
 \end{align*}
-where $C_{l_1,l_2}$ is the Clebsch-Gordan coefficient. 
-Let
+where $C_{l_1,l_2} \in \real^{(2l_1+1)(2l_2+1) \times (2l_1+1)(2l_2+1)}$ is the Clebsch-Gordan coefficient. 
+Let $C_{l_1,l_2,l} \in \real^{(2l_1+1)(2l_2+1) \times (2l+1)}$ be the $l^2-(l_1-l_2)^2+1$ through $l^2-(l_1-l_2)^2+2l+1$ columns of $C_{l_1,l_2,l}$, and let
 \begin{align*}
-	A_{l_1,l_2} = (2l_1+1)(2l_2+1) C_{l_1,l_2}^T F^{l_1} \otimes G^{l_2} C_{l_1,l_2},
+	A_{l_1,l_2,l} = (2l_1+1)(2l_2+1) C_{l_1,l_2,l}^T F^{l_1} \otimes G^{l_2} C_{l_1,l_2,l} \in \real^{(2l+1) \times (2l+1)},
 \end{align*}
-and denote the Fourier coefficients of $fg$ as $H_{m,n}^l$, then
+Denote the Fourier coefficients of $fg$ as $H_{m,n}^l$, then
 \begin{align*}
-	H^l = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} = \frac{1}{2l+1} A_{l_1,l_2}(l),
+	H^l = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} \frac{1}{2l+1} A_{l_1,l_2,l}.
 \end{align*}
-where $A_{l_1,l_2}(l)$ is a sub-diagonal block of $A_{l_1,l_2}$, whose row and column indices range from $l^2-(l_1-l_2)^2+1$ to $l^2-(l_1-l_2)^2+2l+1$.
-
 
 \end{document}
 
