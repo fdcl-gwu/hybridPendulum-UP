@@ -6,7 +6,7 @@ addpath('../matrix Fisher');
 addpath('..');
 
 % time
-sf = 10;
+sf = 100;
 T = 1;
 
 t = 0:1/sf:T;
@@ -17,17 +17,18 @@ N = 10000;
 R = zeros(3,3,N,Nt);
 
 % angular velocity
-k_o = 1;
+k_o = -2;
+G = diag([1,1,1]);
 
 % initial condition
-s0 = [10,10,10];
-initR = expRot(pi/2*[0,0,1]);
+s0 = [0,0,0];
+initR = expRot(pi/2*[0,0,0]);
 R(:,:,:,1) = pdf_MF_sampling(diag(s0)*initR,N);
 
 %% propagate
 for nt = 1:Nt-1
-    trR = permute(R(1,1,:,nt)+R(2,2,:,nt)+R(3,3,:,nt),[1,3,2]);
-    omega = [-k_o*trR;k_o*trR;-k_o*trR];
+    omega = 0.5*k_o*vee(mulRot(G,R(:,:,:,nt),false)-...
+        mulRot(invRot(R(:,:,:,nt)),G,false));
     
     R(:,:,:,nt+1) = mulRot(R(:,:,:,nt),expRot(omega/sf));
 end
@@ -64,7 +65,7 @@ s3 = repmat(cos(theta2),Nt1,1);
 
 % color map
 color = zeros(100,100,3,Nt);
-for nt = 1:Nt
+for nt = 1:10:Nt
     cF = pdf_MF_normal(S(:,nt));
     F = U(:,:,nt)*diag(S(:,nt))*V(:,:,nt).';
     
@@ -90,8 +91,8 @@ end
 color = real(color);
 
 % plot
-for nt = 1:Nt
-    figure(nt);
+for nt = 1:10:Nt
+    figure((nt-1)/10+1);
     surf(s1,s2,s3,sum(color(:,:,:,nt),3),'LineStyle','none');
     
     axis equal;

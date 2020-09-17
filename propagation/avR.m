@@ -70,8 +70,8 @@ warning('on','MATLAB:nearlySingularMatrix');
 
 % initial condition
 f = zeros(2*B,2*B,2*B,Nt);
-s0 = [10,10,10];
-initR = expRot(pi/2*[0,0,1]);
+s0 = [0,0,0];
+initR = expRot(pi/2*[0,0,0]);
 for i = 1:2*B
     for j = 1:2*B
         for k = 1:2*B
@@ -84,14 +84,14 @@ end
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,Nt);
 
 % angular velocity
-k_o = 1;
+k_o = -2;
+G = diag([1,1,1]);
 
 omega = zeros(2*B,2*B,2*B,3);
 for i = 1:2*B
     for j = 1:2*B
         for k = 1:2*B
-            trR = trace(R(:,:,i,j,k));
-            omega(i,j,k,:) = [-k_o*trR;k_o*trR;-k_o*trR]; 
+            omega(i,j,k,:) = 0.5*k_o*vee(G*R(:,:,i,j,k)-R(:,:,i,j,k).'*G,[],false); 
         end
     end
 end
@@ -135,38 +135,31 @@ A = zeros(F_tot,F_tot);
 
 for l = 0:lmax
     tic;
-    indu = -l+lmax+1:l+lmax+1;
-    for m = -l:l
-        for n = -l:l
-            row = l*(2*l-1)*(2*l+1)/3 + (n+l)*(2*l+1) + m+l+1;
-            for l2 = 0:lmax
-                l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
-                for p = -l2:l2
-                    for q = -l2:l2
-                        col = l2*(2*l2-1)*(2*l2+1)/3 + (q+l2)*(2*l2+1) + p+l2+1;
-                        for l1 = l1_all
-                            cl = (2*l1+1)*(2*l2+1)/(2*l+1);
-                            
-                            indomega = -l1+lmax+1:l1+lmax+1;
-                            
-                            row_C1 = (0:2*l1)*(2*l2+1) + p+l2+1;
-                            col_C1 = l^2-(l1-l2)^2+m+l+1;
-                            col_C2 = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
-                            
-                            row_Cu = (0:2*l1)*(2*l2+1) + q+l2+1;
-                            col_Cu = n+l+1;
-                            
-                            for i = 1:3
-                                Cu = CG{l1+1,l2+1}(:,col_C2)*u(indu,indu,l+1,i).';
-                                
-                                A(row,col) = A(row,col)-cl*trace(...
-                                    OMEGA(indomega,indomega,l1+1,i)*Cu(row_Cu,col_Cu)*...
-                                    CG{l1+1,l2+1}(row_C1,col_C1).');
-                            end
-                        end
+    for i = 1:3
+        row = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
+        ind_u = -l+lmax+1:l+lmax+1;
+        for l2 = 0:lmax
+            col = l2*(2*l2-1)*(2*l2+1)/3+1 : (l2+1)*(2*l2+1)*(2*l2+3)/3;
+            temp = zeros((2*l+1)^2,(2*l2+1)^2);
+
+            l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
+            for l1 = l1_all
+                cl = (2*l1+1)*(2*l2+1)/(2*l+1);
+                
+                col_C = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                for j = -l1:l1
+                    row_C1 = (j+l1)*(2*l2+1)+1 : (j+l1+1)*(2*l2+1);
+                    for k = -l1:l1
+                        row_C2 = (k+l1)*(2*l2+1)+1 : (k+l1+1)*(2*l2+1);
+                        temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
+                            kron(CG{l1+1,l2+1}(row_C2,col_C).',...
+                            CG{l1+1,l2+1}(row_C1,col_C).');
                     end
                 end
             end
+            
+            temp = kron(u(ind_u,ind_u,l+1,i),eye(2*l+1,2*l+1))*temp;
+            A(row,col) = A(row,col)+temp;
         end
     end
     toc;
@@ -247,13 +240,13 @@ for nt = 1:Nt-1
         end
     end
     
-%     f(:,:,:,nt+1) = real(f(:,:,:,nt+1));
+    f(:,:,:,nt+1) = real(f(:,:,:,nt+1));
 %     temp = f(:,:,:,nt+1);
-%     temp(temp<0) = 0;
+%     temp(temp<max(max(max(temp)))/10) = 0;
 %     f(:,:,:,nt+1) = temp/(sum(sum(temp,3),1)*w.');
 end
 
-f = real(f);
+% f = real(f);
 % for nt = 1:Nt
 %     temp = f(:,:,:,nt);
 %     temp(temp<0) = 0;
@@ -280,11 +273,7 @@ S = zeros(3,Nt);
 
 for nt = 1:Nt
     [U(:,:,nt),D,V(:,:,nt)] = psvd(ER(:,:,nt));
-    if nt==1
-        S(:,nt) = pdf_MF_M2S(diag(D),s0.');
-    else
-        S(:,nt) = pdf_MF_M2S(diag(D),S(:,nt-1));
-    end
+    S(:,nt) = pdf_MF_M2S(diag(D),s0.');
 end
 
 % spherical grid

@@ -14,6 +14,8 @@
 \newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
 \newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
 \newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
 \newcommand{\liediff}{\mathfrak{d}}
 \newcommand{\dft}{\mathcal{F}}
 \newcommand{\real}{\ensuremath{\mathbb{R}}}
@@ -51,9 +53,9 @@ Based on the product rule, we have
 where $C_{l_1,l_2,l}\in\real^{(2l_1+1)(2l_2+1) \times (2l+1)}$ is defined in the previous note.
 Split the rows of $C_{l_1,l_2,l}$ equally into $2l_1+1$ pieces, and denote $C_{l_1,l_2,j,l} \in \real^{(2l_2+1) \times (2l+1)}$ as the $(j+l_1+1)$-th piece for $j=-l_1,\ldots,l_1$.
 Then \eqref{eqn:prod} can be written as
-\begin{align*}
+\begin{align} \label{eqn:l,l2}
 	\mathcal{F}^l(\Omega_i(R,t)p(R,t)) = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{j,k=-l_1}^{l_1} \bar{\Omega}_{j,k,i}^{l_1} C_{l_1,l_2,j,l}^T \bar{p}^{l_2} C_{l_1,l_2,k,l}.
-\end{align*}
+\end{align}
 
 Element-wise, it becomes
 \begin{align*}
@@ -66,6 +68,15 @@ Then the above element-wise formula can be written as
 \begin{align*}
 	\mathcal{F}_{m,n}^l(\liediff_i(\Omega_ip)) = \sum_{l_2=0}^{B-1} \sum_{p,q=-l_2}^{l_2} \bar{p}_{p,q}^{l_2} \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \tr{\bar{\Omega}_i^{l_1} (C_{l_1,l_2,l}(u_i^l)^T)_{q,n} (C_{l_1,l_2,l})_{p,m}^T}
 \end{align*}
+
+From \eqref{eqn:l,l2}, we can also derive the following matrix expression
+\begin{align*}
+	&\vect{\mathcal{F}^l(\liediff_i(\Omega_ip))} = \sum_{l_2=0}^{B-1} \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{j,k=-l_1}^{l_1} \bar{\Omega}_{j,k,i}^{l_1} \vect{C_{l_1,l_2,j,l}^T \bar{p}^{l_1} C_{l_1,l_2,k,l}(u_i^l)^T} \\
+	&\qquad = \sum_{l_2=0}^{B-1} \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{j,k=-l_1}^{l_1} \bar{\Omega}_{j,k,i}^{l_1} (u_i^l C_{l_1,l_2,k,l}^T \otimes C_{l_1,l_2,j,l}^T) \vect{\bar{p}^{l_2}} \\
+	&\qquad = \sum_{l_2=0}^{B-1} \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{j,k=-l_1}^{l_1} \bar{\Omega}_{j,k,i}^{l_1} (u_i^l \otimes I^l)(C_{l_1,l_2,k,l}^T \otimes C_{l_1,l_2,j,l}^T) \vect{\bar{p}^{l_2}} \\
+	&\qquad = (u_i^l \otimes I^l) \sum_{l_2=0}^{B-1} \left( \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{j,k=-l_1}^{l_1} \bar{\Omega}_{j,k,i}^{l_1} (C_{l_1,l_2,k,l}^T \otimes C_{l_1,l_2,j,l}^T) \right) \vect{\bar{p}^{l_2}},
+\end{align*}
+where $I^l = I_{(2l+1) \times (2l+1)}$.
 
 \end{document}
 

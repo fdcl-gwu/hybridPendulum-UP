@@ -243,3 +243,4 @@ TSWLatexianTemp*
 
 # matlab data or figure
 *.fig
+*.mat
