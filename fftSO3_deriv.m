@@ -1,15 +1,20 @@
-function [ dF, df, F, f, R ] = fftSO3_deriv( func, B, eta )
+function [ dF, df, F, f, R ] = fftSO3_deriv( func, B, eta, isreal )
+
+if ~exist('isreal','var') || isempty(isreal)
+    isreal = false;
+end
 
 lmax = B-1;
 
 % forward transform
-[F,f,R] = fftSO3(func,B);
+[F,f,R] = fftSO3(func,B,isreal);
 
 % u
-u = getu(lmax);
+u = getu(lmax,isreal);
 
 % derivatives
 dF = zeros(2*lmax+1,2*lmax+1,lmax+1);
+
 for l = 0:lmax
     ind = -l+lmax+1:l+lmax+1;
     dF(ind,ind,l+1) = eta(1)*F(ind,ind,l+1)*u(ind,ind,l+1,1).' + ...

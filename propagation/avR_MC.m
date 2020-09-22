@@ -17,7 +17,7 @@ N = 10000;
 R = zeros(3,3,N,Nt);
 
 % angular velocity
-k_o = -2;
+k_o = -4;
 G = diag([1,1,1]);
 
 % initial condition

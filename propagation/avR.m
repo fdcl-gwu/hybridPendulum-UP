@@ -13,7 +13,7 @@ t = 0:1/sf:T;
 Nt = T*sf+1;
 
 % band limit
-B = 10;
+B = 15;
 
 % grid
 alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
@@ -84,7 +84,7 @@ end
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,Nt);
 
 % angular velocity
-k_o = -2;
+k_o = -4;
 G = diag([1,1,1]);
 
 omega = zeros(2*B,2*B,2*B,3);
