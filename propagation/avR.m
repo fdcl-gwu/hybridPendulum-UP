@@ -1,15 +1,18 @@
-clear;
+function [ f ] = avR( isreal )
 close all;
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
 addpath('..');
 
+if ~exist('isreal','var') || isempty(isreal)
+    isreal = false;
+end
+
 % time
 sf = 10;
 T = 1;
 
-t = 0:1/sf:T;
 Nt = T*sf+1;
 
 % band limit
@@ -54,7 +57,7 @@ for j = 1:2*B
 end
 
 % derivatives
-u = getu(lmax);
+u = getu(lmax,isreal);
 
 % CG coefficient
 warning('off','MATLAB:nearlySingularMatrix');
@@ -67,6 +70,113 @@ for l1 = 0:lmax
 end
 
 warning('on','MATLAB:nearlySingularMatrix');
+
+% Psi
+if isreal
+    Psi = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+    
+    for k = 1:2*B
+        for l = 0:lmax
+            for m = -l:l
+                for n = -l:0
+                    if m==0 && n==0
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) = d(lmax+1,lmax+1,l+1,k);
+                    elseif m==0 || n==0
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) = (-1)^(m-n)*sqrt(2)...
+                            *d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k);
+                    else
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) =...
+                            (-1)^(m-n)*d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k)+...
+                            (-1)^m*sign(m)*d(abs(m)+lmax+1,-abs(n)+lmax+1,l+1,k);
+                    end
+                end
+            end
+            
+            if l>0
+                Psi(-l+lmax+1:l+lmax+1,1+lmax+1:l+lmax+1,l+1,k) =...
+                    flip(Psi(-l+lmax+1:l+lmax+1,-l+lmax+1:-1+lmax+1,l+1,k),2);
+            end
+        end
+    end
+end
+
+% W
+if isreal
+    W = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+    
+    for k = 1:2*B
+        for l = 0:lmax
+            for m = -l:l
+                if m>=0
+                    n_all = 0:l;
+                else
+                    n_all = -l:-1;
+                end
+                
+                for n = n_all
+                    if m==0 && n==0
+                        W(m+lmax+1,n+lmax+1,l+1,k) = d(lmax+1,lmax+1,l+1,k);
+                    elseif m==0 || n==0
+                        W(m+lmax+1,n+lmax+1,l+1,k) = (-1)^(m-n)*sqrt(2)...
+                            *d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k);
+                    else
+                        W(m+lmax+1,n+lmax+1,l+1,k) =...
+                            (-1)^(m-n)*d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k)+...
+                            (-1)^m*sign(m)*d(abs(m)+lmax+1,-abs(n)+lmax+1,l+1,k);
+                    end
+                end
+            end
+        end
+    end
+end
+    
+% X
+if isreal
+    Xa = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+    Xg = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+    
+    for j = 1:2*B
+        for l = 0:lmax
+            for m = -l:l
+                Xa(m+lmax+1,m+lmax+1,l+1,j) = cos(m*alpha(j));
+                Xg(m+lmax+1,m+lmax+1,l+1,j) = cos(m*gamma(j));
+                if m~=0
+                    Xa(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*alpha(j));
+                    Xg(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*gamma(j));
+                end
+            end
+        end
+    end
+end
+
+% cg matrix
+if isreal
+    T = cell(2*lmax+1,1);
+    for l = 0:2*lmax
+        T{l+1} = zeros(2*l+1,2*l+1);
+        for m = -l:l
+            if m<0
+                T{l+1}(m+l+1,m+l+1) = 1i;
+                T{l+1}(m+l+1,-m+l+1) = -1i*(-1)^(-m);
+            elseif m==0
+                T{l+1}(l+1,l+1) = sqrt(2);
+            else
+                T{l+1}(m+l+1,m+l+1) = (-1)^(m);
+                T{l+1}(m+l+1,-m+l+1) = 1;
+            end
+        end
+        
+        T{l+1} = T{l+1}/sqrt(2);
+    end
+    
+    cg = cell(B,B);
+    for l1 = 0:lmax
+        for l2 = 0:lmax
+            cg{l1+1,l2+1} = kron(conj(T{l1+1}),conj(T{l2+1}))...
+                *CG{l1+1,l2+1}*blkdiag(T{abs(l1-l2)+1:l1+l2+1}).';
+        end
+    end
+end
 
 % initial condition
 f = zeros(2*B,2*B,2*B,Nt);
@@ -100,25 +210,56 @@ end
 OMEGA = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
 
 for i = 1:3
-    S1 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
+    if isreal
+        S12 = zeros(2*B,2*B,2*B);
         for kk = 1:2*B
-            S1(ii,:,kk) = ifftshift(ifft(omega(:,ii,kk,i)))*(2*B);
+            S12(kk,:,:) = fftshift(fft2(reshape(omega(:,kk,:,i),2*B,2*B)));
         end
-    end
 
-    S2 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for jj = 1:2*B
-            S2(ii,jj,:) = ifftshift(ifft(S1(ii,jj,:)))*(2*B);
+        for l = 0:lmax
+            for m = -l:l
+                indm = m+lmax+2;
+                for n = -l:l
+                    indn = n+lmax+2;
+                    ind_n = -n+lmax+2;
+                    sin_mang = -imag(S12(:,indm,indn));
+                    sin_ma_ng = -imag(S12(:,indm,ind_n));
+                    cos_mang = real(S12(:,indm,indn));
+                    cos_ma_ng = real(S12(:,indm,ind_n));
+
+                    if (m>=0 && n>=0) || (m<0 && n<0)
+                        OMEGA(m+lmax+1,n+lmax+1,l+1,i) = sum(w.'.*(...
+                            -0.5*(cos_ma_ng-cos_mang).*reshape(Psi(-m+lmax+1,n+lmax+1,l+1,:),2*B,1)...
+                            +0.5*(cos_ma_ng+cos_mang).*reshape(Psi(m+lmax+1,n+lmax+1,l+1,:),2*B,1)));
+                    else
+                        OMEGA(m+lmax+1,n+lmax+1,l+1,i) = sum(w.'.*(...
+                            -0.5*(sin_mang+sin_ma_ng).*reshape(Psi(-m+lmax+1,n+lmax+1,l+1,:),2*B,1)...
+                            +0.5*(sin_mang-sin_ma_ng).*reshape(Psi(m+lmax+1,n+lmax+1,l+1,:),2*B,1)));
+                    end
+                end
+            end
         end
-    end
+    else
+        S1 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for kk = 1:2*B
+                S1(ii,:,kk) = ifftshift(ifft(omega(:,ii,kk,i)))*(2*B);
+            end
+        end
 
-    for l = 0:lmax
-        for jj = -l:l
-            for kk = -l:l
-                OMEGA(jj+lmax+1,kk+lmax+1,l+1,i) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
-                    reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+        S2 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for jj = 1:2*B
+                S2(ii,jj,:) = ifftshift(ifft(S1(ii,jj,:)))*(2*B);
+            end
+        end
+
+        for l = 0:lmax
+            for jj = -l:l
+                for kk = -l:l
+                    OMEGA(jj+lmax+1,kk+lmax+1,l+1,i) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
+                        reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+                end
             end
         end
     end
@@ -151,9 +292,15 @@ for l = 0:lmax
                     row_C1 = (j+l1)*(2*l2+1)+1 : (j+l1+1)*(2*l2+1);
                     for k = -l1:l1
                         row_C2 = (k+l1)*(2*l2+1)+1 : (k+l1+1)*(2*l2+1);
-                        temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
-                            kron(CG{l1+1,l2+1}(row_C2,col_C).',...
-                            CG{l1+1,l2+1}(row_C1,col_C).');
+                        if isreal
+                            temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
+                                kron(cg{l1+1,l2+1}(row_C2,col_C)',...
+                                cg{l1+1,l2+1}(row_C1,col_C).');
+                        else
+                            temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
+                                kron(CG{l1+1,l2+1}(row_C2,col_C).',...
+                                CG{l1+1,l2+1}(row_C1,col_C).');
+                        end
                     end
                 end
             end
@@ -169,25 +316,56 @@ expA = expm(A/sf);
 
 %% propagation
 for nt = 1:Nt-1
-    S1 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
+    if isreal
+        S12 = zeros(2*B,2*B,2*B);
         for kk = 1:2*B
-            S1(ii,:,kk) = fftshift(ifft(f(:,ii,kk,nt)))*(2*B);
+            S12(kk,:,:) = fftshift(fft2(reshape(f(:,kk,:,nt),2*B,2*B)));
         end
-    end
 
-    S2 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for jj = 1:2*B
-            S2(ii,jj,:) = fftshift(ifft(S1(ii,jj,:)))*(2*B);
+        for l = 0:lmax
+            for m = -l:l
+                indm = m+lmax+2;
+                for n = -l:l
+                    indn = n+lmax+2;
+                    ind_n = -n+lmax+2;
+                    sin_mang = -imag(S12(:,indm,indn));
+                    sin_ma_ng = -imag(S12(:,indm,ind_n));
+                    cos_mang = real(S12(:,indm,indn));
+                    cos_ma_ng = real(S12(:,indm,ind_n));
+
+                    if (m>=0 && n>=0) || (m<0 && n<0)
+                        F(m+lmax+1,n+lmax+1,l+1,nt) = sum(w.'.*(...
+                            -0.5*(cos_ma_ng-cos_mang).*reshape(Psi(-m+lmax+1,n+lmax+1,l+1,:),2*B,1)...
+                            +0.5*(cos_ma_ng+cos_mang).*reshape(Psi(m+lmax+1,n+lmax+1,l+1,:),2*B,1)));
+                    else
+                        F(m+lmax+1,n+lmax+1,l+1,nt) = sum(w.'.*(...
+                            -0.5*(sin_mang+sin_ma_ng).*reshape(Psi(-m+lmax+1,n+lmax+1,l+1,:),2*B,1)...
+                            +0.5*(sin_mang-sin_ma_ng).*reshape(Psi(m+lmax+1,n+lmax+1,l+1,:),2*B,1)));
+                    end
+                end
+            end
         end
-    end
+    else
+        S1 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for kk = 1:2*B
+                S1(ii,:,kk) = fftshift(ifft(f(:,ii,kk,nt)))*(2*B);
+            end
+        end
 
-    for l = 0:lmax
-        for jj = -l:l
-            for kk = -l:l
-                F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
-                    reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+        S2 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for jj = 1:2*B
+                S2(ii,jj,:) = fftshift(ifft(S1(ii,jj,:)))*(2*B);
+            end
+        end
+
+        for l = 0:lmax
+            for jj = -l:l
+                for kk = -l:l
+                    F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
+                        reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+                end
             end
         end
     end
@@ -210,32 +388,47 @@ for nt = 1:Nt-1
     end
     
     % inverse transform
-    S2 = zeros(2*B,2*B-1,2*B-1);
-    for m = -lmax:lmax
-        for n = -lmax:lmax
-            lmin = max(abs(m),abs(n));
-            F_mn = reshape(F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,nt+1),1,[]);
-
+    if isreal
+        for j1 = 1:2*B
             for k = 1:2*B
-                d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
-                S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
+                for j2 = 1:2*B
+                    for l = 0:lmax
+                        ind = -l+lmax+1:l+lmax+1;
+                        f(j1,k,j2,nt+1) = f(j1,k,j2,nt+1) + (2*l+1)*trace(...
+                            F(ind,ind,l+1,nt+1).'*Xa(ind,ind,l+1,j1)*...
+                            W(ind,ind,l+1,k)*Xg(ind,ind,l+1,j2));
+                    end
+                end
             end
         end
-    end
+    else
+        S2 = zeros(2*B,2*B-1,2*B-1);
+        for m = -lmax:lmax
+            for n = -lmax:lmax
+                lmin = max(abs(m),abs(n));
+                F_mn = reshape(F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,nt+1),1,[]);
 
-    S1 = zeros(2*B,2*B-1,2*B);
-    for i = 1:2*B
-        for j = 1:2*B-1
-            for k = 1:2*B
-                S1(i,j,k) = sum(exp(-1i*(-B+1:B-1)*gamma(k)).*reshape(S2(i,j,:),1,[]));
+                for k = 1:2*B
+                    d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+                    S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
+                end
             end
         end
-    end
 
-    for i = 1:2*B
-        for j = 1:2*B
-            for k = 1:2*B
-                f(j,i,k,nt+1) = sum(exp(-1i*(-B+1:B-1)*alpha(j)).*S1(i,:,k));
+        S1 = zeros(2*B,2*B-1,2*B);
+        for i = 1:2*B
+            for j = 1:2*B-1
+                for k = 1:2*B
+                    S1(i,j,k) = sum(exp(-1i*(-B+1:B-1)*gamma(k)).*reshape(S2(i,j,:),1,[]));
+                end
+            end
+        end
+
+        for i = 1:2*B
+            for j = 1:2*B
+                for k = 1:2*B
+                    f(j,i,k,nt+1) = sum(exp(-1i*(-B+1:B-1)*alpha(j)).*S1(i,:,k));
+                end
             end
         end
     end
