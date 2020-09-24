@@ -22,60 +22,66 @@ end
 f = zeros(2*B,2*B,2*B);
 
 if isreal
-    % W
-    W = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
+    % Psi
+    Psi = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
     
     for k = 1:2*B
         for l = 0:lmax
             for m = -l:l
-                if m>=0
-                    n_all = 0:l;
-                else
-                    n_all = -l:-1;
-                end
-                
-                for n = n_all
+                for n = -l:0
                     if m==0 && n==0
-                        W(m+lmax+1,n+lmax+1,l+1,k) = d(lmax+1,lmax+1,l+1,k);
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) = d(lmax+1,lmax+1,l+1,k);
                     elseif m==0 || n==0
-                        W(m+lmax+1,n+lmax+1,l+1,k) = (-1)^(m-n)*sqrt(2)...
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) = (-1)^(m-n)*sqrt(2)...
                             *d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k);
                     else
-                        W(m+lmax+1,n+lmax+1,l+1,k) =...
+                        Psi(m+lmax+1,n+lmax+1,l+1,k) =...
                             (-1)^(m-n)*d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k)+...
                             (-1)^m*sign(m)*d(abs(m)+lmax+1,-abs(n)+lmax+1,l+1,k);
                     end
                 end
             end
-        end
-    end
-    
-    % X
-    Xa = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-    Xg = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-    
-    for j = 1:2*B
-        for l = 0:lmax
-            for m = -l:l
-                Xa(m+lmax+1,m+lmax+1,l+1,j) = cos(m*alpha(j));
-                Xg(m+lmax+1,m+lmax+1,l+1,j) = cos(m*gamma(j));
-                if m~=0
-                    Xa(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*alpha(j));
-                    Xg(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*gamma(j));
-                end
+            
+            if l>0
+                Psi(-l+lmax+1:l+lmax+1,1+lmax+1:l+lmax+1,l+1,k) =...
+                    flip(Psi(-l+lmax+1:l+lmax+1,-l+lmax+1:-1+lmax+1,l+1,k),2);
             end
         end
     end
     
-    for j1 = 1:2*B
-        for k = 1:2*B
-            for j2 = 1:2*B
-                for l = 0:lmax
-                    ind = -l+lmax+1:l+lmax+1;
-                    f(j1,k,j2) = f(j1,k,j2) + (2*l+1)*trace(...
-                        F(ind,ind,l+1).'*Xa(ind,ind,l+1,j1)*...
-                        W(ind,ind,l+1,k)*Xg(ind,ind,l+1,j2));
-                end
+    % real harmonic analysis
+    S1 = zeros(2*B-1,2*B,2*B-1);
+    S2 = zeros(2*B-1,2*B,2*B-1);
+    for m = -lmax:lmax
+        for n = -lmax:lmax
+            lmin = max(abs(m),abs(n));
+            F_mn = reshape(F(m+lmax+1,n+lmax+1,lmin+1:lmax+1),1,[]);
+            
+            for k = 1:2*B
+                Psi1_betak = reshape(Psi(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+                Psi2_betak = reshape(Psi(-m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+                
+                S1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi1_betak);
+                S2(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi2_betak);
+            end
+        end
+    end
+    
+    for i = 1:2*B
+        for j = 1:2*B
+            smsn_p = -sin(permute(0:lmax,[2,1])*alpha(i)).*sin(permute(0:lmax,[1,3,2])*gamma(j));
+            smsn_n = -sin(permute(-lmax:-1,[2,1])*alpha(i)).*sin(permute(-lmax:-1,[1,3,2])*gamma(j));
+            cmcn_p = cos(permute(0:lmax,[2,1])*alpha(i)).*cos(permute(0:lmax,[1,3,2])*gamma(j));
+            cmcn_n = cos(permute(-lmax:-1,[2,1])*alpha(i)).*cos(permute(-lmax:-1,[1,3,2])*gamma(j));
+            
+            smcn_p = -sin(permute(0:lmax,[2,1])*alpha(i)).*cos(permute(-lmax:-1,[1,3,2])*gamma(j));
+            smcn_n = -sin(permute(-lmax:-1,[2,1])*alpha(i)).*cos(permute(0:lmax,[1,3,2])*gamma(j));
+            cmsn_p = cos(permute(0:lmax,[2,1])*alpha(i)).*sin(permute(-lmax:-1,[1,3,2])*gamma(j));
+            cmsn_n = cos(permute(-lmax:-1,[2,1])*alpha(i)).*sin(permute(0:lmax,[1,3,2])*gamma(j));
+            
+            for k = 1:2*B
+                f(i,k,j) = sum(sum(S2(:,k,:).*cat(3,[smsn_n;smcn_p],[smcn_n;smsn_p]),1),3)...
+                    + sum(sum(S1(:,k,:).*cat(3,[cmcn_n;cmsn_p],[cmsn_n;cmcn_p]),1),3);
             end
         end
     end

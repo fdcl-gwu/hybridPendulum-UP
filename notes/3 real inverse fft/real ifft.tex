@@ -1,0 +1,53 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+
+\title{\vspace{-4ex}\textbf{Real Inverse FFT on \SO\vspace{-4ex}}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+Real harmonics on \SO:
+\begin{align*}
+	U_{m,n}^l(R(\alpha,\beta,\gamma)) = \begin{cases}
+		-\sin m\alpha \sin n\gamma \Psi_{-m,m}^l(\beta) + \cos m\alpha \cos n\gamma \Psi_{m,n}^l(\beta), \quad m\geq 0, n\geq 0 \text{ or } m<0, n<0 \\
+		-\sin m\alpha \cos n\gamma \Psi_{-m,m}^l(\beta) + \cos m\alpha \sin n\gamma \Psi_{m,n}^l(\beta), \quad m\geq 0, n<0 \text{ or } m<0, n\geq 0
+	\end{cases}.
+\end{align*}
+
+Inverse Fourier transform:
+\begin{align*}
+	f(R(\alpha,\beta,\gamma)) &= \sum_{l=0}^{B-1} \sum_{m,n=-l}^l (2l+1)F_{m,n}^l U_{m,n}^l(R) \\
+	&= \sum_{l=0}^{B-1} (2l+1) \Bigg( \sum_{\substack{-l\leq m,n\leq l \\ m\geq 0, n\geq 0 \text{ or} \\ m<0, n<0}} \left( -\sin m\alpha \sin n\gamma \Psi_{-m,m}^l(\beta) + \cos m\alpha \cos n\gamma \Psi_{m,n}^l(\beta) \right) F_{m,n}^l \\
+	&\qquad + \sum_{\substack{-l\leq m,n\leq l \\ m\geq 0, n< 0 \text{ or} \\ m<0, n\geq 0}} \left( -\sin m\alpha \cos n\gamma \Psi_{-m,m}^l(\beta) + \cos m\alpha \sin n\gamma \Psi_{m,n}^l(\beta) \right) F_{m,n}^l \Bigg) \\
+	&= \sum_{\substack{m\geq 0, n\geq 0 \text{ or} \\ m<0, n<0}} \left( -\sin m\alpha \sin n\gamma S'_{m,n}(\beta) + \cos m\alpha \cos n\gamma S_{m,n}(\beta) \right) \\
+	&\qquad + \sum_{\substack{m\geq 0, n< 0 \text{ or} \\ m<0, n\geq 0}} \left( -\sin m\alpha \cos n\gamma S'_{m,n}(\beta) + \cos m\alpha \sin n\gamma S_{m,n}(\beta) \right),
+\end{align*}
+where
+\begin{align*}
+	S'_{m,n}(\beta) &= \sum_{l=\max\{\abs{m},\abs{n}\}}^{B-1} (2l+1) \Psi_{-m,n}^l(\beta) F_{m,n}^l \\
+	S_{m,n}(\beta) &= \sum_{l=\max\{\abs{m},\abs{n}\}}^{B-1} (2l+1) \Psi_{m,n}^l(\beta) F_{m,n}^l \\
+\end{align*}
+
+\end{document}
+

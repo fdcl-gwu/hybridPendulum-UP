@@ -16,7 +16,7 @@ T = 1;
 Nt = T*sf+1;
 
 % band limit
-B = 15;
+B = 10;
 
 % grid
 alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
@@ -100,55 +100,6 @@ if isreal
     end
 end
 
-% W
-if isreal
-    W = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-    
-    for k = 1:2*B
-        for l = 0:lmax
-            for m = -l:l
-                if m>=0
-                    n_all = 0:l;
-                else
-                    n_all = -l:-1;
-                end
-                
-                for n = n_all
-                    if m==0 && n==0
-                        W(m+lmax+1,n+lmax+1,l+1,k) = d(lmax+1,lmax+1,l+1,k);
-                    elseif m==0 || n==0
-                        W(m+lmax+1,n+lmax+1,l+1,k) = (-1)^(m-n)*sqrt(2)...
-                            *d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k);
-                    else
-                        W(m+lmax+1,n+lmax+1,l+1,k) =...
-                            (-1)^(m-n)*d(abs(m)+lmax+1,abs(n)+lmax+1,l+1,k)+...
-                            (-1)^m*sign(m)*d(abs(m)+lmax+1,-abs(n)+lmax+1,l+1,k);
-                    end
-                end
-            end
-        end
-    end
-end
-    
-% X
-if isreal
-    Xa = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-    Xg = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-    
-    for j = 1:2*B
-        for l = 0:lmax
-            for m = -l:l
-                Xa(m+lmax+1,m+lmax+1,l+1,j) = cos(m*alpha(j));
-                Xg(m+lmax+1,m+lmax+1,l+1,j) = cos(m*gamma(j));
-                if m~=0
-                    Xa(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*alpha(j));
-                    Xg(m+lmax+1,-m+lmax+1,l+1,j) = -sin(m*gamma(j));
-                end
-            end
-        end
-    end
-end
-
 % cg matrix
 if isreal
     T = cell(2*lmax+1,1);
@@ -194,7 +145,7 @@ end
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,Nt);
 
 % angular velocity
-k_o = -4;
+k_o = -2;
 G = diag([1,1,1]);
 
 omega = zeros(2*B,2*B,2*B,3);
@@ -389,15 +340,38 @@ for nt = 1:Nt-1
     
     % inverse transform
     if isreal
-        for j1 = 1:2*B
-            for k = 1:2*B
-                for j2 = 1:2*B
-                    for l = 0:lmax
-                        ind = -l+lmax+1:l+lmax+1;
-                        f(j1,k,j2,nt+1) = f(j1,k,j2,nt+1) + (2*l+1)*trace(...
-                            F(ind,ind,l+1,nt+1).'*Xa(ind,ind,l+1,j1)*...
-                            W(ind,ind,l+1,k)*Xg(ind,ind,l+1,j2));
-                    end
+        S1 = zeros(2*B-1,2*B,2*B-1);
+        S2 = zeros(2*B-1,2*B,2*B-1);
+        for m = -lmax:lmax
+            for n = -lmax:lmax
+                lmin = max(abs(m),abs(n));
+                F_mn = reshape(F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,nt+1),1,[]);
+
+                for k = 1:2*B
+                    Psi1_betak = reshape(Psi(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+                    Psi2_betak = reshape(Psi(-m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
+
+                    S1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi1_betak);
+                    S2(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi2_betak);
+                end
+            end
+        end
+
+        for i = 1:2*B
+            for j = 1:2*B
+                smsn_p = -sin(permute(0:lmax,[2,1])*alpha(i)).*sin(permute(0:lmax,[1,3,2])*gamma(j));
+                smsn_n = -sin(permute(-lmax:-1,[2,1])*alpha(i)).*sin(permute(-lmax:-1,[1,3,2])*gamma(j));
+                cmcn_p = cos(permute(0:lmax,[2,1])*alpha(i)).*cos(permute(0:lmax,[1,3,2])*gamma(j));
+                cmcn_n = cos(permute(-lmax:-1,[2,1])*alpha(i)).*cos(permute(-lmax:-1,[1,3,2])*gamma(j));
+
+                smcn_p = -sin(permute(0:lmax,[2,1])*alpha(i)).*cos(permute(-lmax:-1,[1,3,2])*gamma(j));
+                smcn_n = -sin(permute(-lmax:-1,[2,1])*alpha(i)).*cos(permute(0:lmax,[1,3,2])*gamma(j));
+                cmsn_p = cos(permute(0:lmax,[2,1])*alpha(i)).*sin(permute(-lmax:-1,[1,3,2])*gamma(j));
+                cmsn_n = cos(permute(-lmax:-1,[2,1])*alpha(i)).*sin(permute(0:lmax,[1,3,2])*gamma(j));
+
+                for k = 1:2*B
+                    f(i,k,j,nt+1) = sum(sum(S2(:,k,:).*cat(3,[smsn_n;smcn_p],[smcn_n;smsn_p]),1),3)...
+                        + sum(sum(S1(:,k,:).*cat(3,[cmcn_n;cmsn_p],[cmsn_n;cmcn_p]),1),3);
                 end
             end
         end
@@ -517,5 +491,7 @@ end
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
 rmpath('..');
+
+end
 
 
