@@ -1,5 +1,4 @@
-clear;
-close all;
+function [ ER, S ] = avR_MC(  )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -13,11 +12,11 @@ t = 0:1/sf:T;
 Nt = T*sf+1;
 
 % number of samples
-N = 10000;
+N = 100000;
 R = zeros(3,3,N,Nt);
 
 % angular velocity
-k_o = -4;
+k_o = -5;
 G = diag([1,1,1]);
 
 % initial condition
@@ -25,12 +24,16 @@ s0 = [0,0,0];
 initR = expRot(pi/2*[0,0,0]);
 R(:,:,:,1) = pdf_MF_sampling(diag(s0)*initR,N);
 
+% noise
+H = diag([pi/4,pi/4,pi/4]);
+
 %% propagate
 for nt = 1:Nt-1
+    omega_e = mvnrnd([0;0;0],H*H'*sf,N)';
     omega = 0.5*k_o*vee(mulRot(G,R(:,:,:,nt),false)-...
         mulRot(invRot(R(:,:,:,nt)),G,false));
     
-    R(:,:,:,nt+1) = mulRot(R(:,:,:,nt),expRot(omega/sf));
+    R(:,:,:,nt+1) = mulRot(R(:,:,:,nt),expRot((omega+omega_e)/sf));
 end
 
 %% match to matrix Fisher and plot
@@ -102,5 +105,7 @@ end
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
 rmpath('..');
+
+end
 
 

@@ -1,4 +1,4 @@
-function [ f ] = avR( isreal )
+function [ f, ER, S ] = avR( isreal )
 close all;
 
 addpath('../rotation3d');
@@ -145,14 +145,15 @@ end
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,Nt);
 
 % angular velocity
-k_o = -2;
+k_o = -5;
 G = diag([1,1,1]);
+Rd = expRot([0,0,0]);
 
 omega = zeros(2*B,2*B,2*B,3);
 for i = 1:2*B
     for j = 1:2*B
         for k = 1:2*B
-            omega(i,j,k,:) = 0.5*k_o*vee(G*R(:,:,i,j,k)-R(:,:,i,j,k).'*G,[],false); 
+            omega(i,j,k,:) = 0.5*k_o*vee(G*Rd.'*R(:,:,i,j,k)-R(:,:,i,j,k).'*Rd*G,[],false); 
         end
     end
 end
@@ -217,7 +218,7 @@ for i = 1:3
 end
 
 % noise
-H = diag([0,0,0]);
+H = diag([pi/4,pi/4,pi/4]);
 G = H*H';
 
 %% coefficient matrix
@@ -227,9 +228,11 @@ A = zeros(F_tot,F_tot);
 
 for l = 0:lmax
     tic;
+    row = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
+    ind_u = -l+lmax+1:l+lmax+1;
+    
+    % drift
     for i = 1:3
-        row = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
-        ind_u = -l+lmax+1:l+lmax+1;
         for l2 = 0:lmax
             col = l2*(2*l2-1)*(2*l2+1)/3+1 : (l2+1)*(2*l2+1)*(2*l2+3)/3;
             temp = zeros((2*l+1)^2,(2*l2+1)^2);
@@ -260,6 +263,15 @@ for l = 0:lmax
             A(row,col) = A(row,col)+temp;
         end
     end
+    
+    % diffusion
+    for i = 1:3
+        for j = 1:3
+            A(row,row) = A(row,row)+0.5*G(i,j)*kron(u(ind_u,ind_u,l+1,i)*...
+                u(ind_u,ind_u,l+1,j),eye(2*l+1));
+        end
+    end
+    
     toc;
 end
 
