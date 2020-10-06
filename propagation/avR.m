@@ -120,10 +120,9 @@ if isreal
         T{l+1} = T{l+1}/sqrt(2);
     end
     
-    cg = cell(B,B);
     for l1 = 0:lmax
         for l2 = 0:lmax
-            cg{l1+1,l2+1} = kron(conj(T{l1+1}),conj(T{l2+1}))...
+            CG{l1+1,l2+1} = kron(conj(T{l1+1}),conj(T{l2+1}))...
                 *CG{l1+1,l2+1}*blkdiag(T{abs(l1-l2)+1:l1+l2+1}).';
         end
     end
@@ -232,36 +231,32 @@ for l = 0:lmax
     ind_u = -l+lmax+1:l+lmax+1;
     
     % drift
-    for i = 1:3
-        for l2 = 0:lmax
-            col = l2*(2*l2-1)*(2*l2+1)/3+1 : (l2+1)*(2*l2+1)*(2*l2+3)/3;
-            temp = zeros((2*l+1)^2,(2*l2+1)^2);
-
-            l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
-            for l1 = l1_all
-                cl = (2*l1+1)*(2*l2+1)/(2*l+1);
-                
-                col_C = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
-                for j = -l1:l1
-                    row_C1 = (j+l1)*(2*l2+1)+1 : (j+l1+1)*(2*l2+1);
-                    for k = -l1:l1
-                        row_C2 = (k+l1)*(2*l2+1)+1 : (k+l1+1)*(2*l2+1);
-                        if isreal
-                            temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
-                                kron(cg{l1+1,l2+1}(row_C2,col_C)',...
-                                cg{l1+1,l2+1}(row_C1,col_C).');
-                        else
-                            temp = temp-cl*OMEGA(j+lmax+1,k+lmax+1,l1+1,i)*...
-                                kron(CG{l1+1,l2+1}(row_C2,col_C).',...
-                                CG{l1+1,l2+1}(row_C1,col_C).');
-                        end
-                    end
+    for l2 = 0:lmax
+        col = l2*(2*l2-1)*(2*l2+1)/3+1 : (l2+1)*(2*l2+1)*(2*l2+3)/3;
+        l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
+        
+        temp_l2 = zeros((2*l+1)^2,(2*l2+1)^2,3);
+        for l1 = l1_all
+            cl = (2*l1+1)*(2*l2+1)/(2*l+1);
+            col_C = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+            
+            temp_l1 = zeros((2*l+1)^2,(2*l2+1)^2,3);
+            for j = -l1:l1
+                row_C1 = (j+l1)*(2*l2+1)+1 : (j+l1+1)*(2*l2+1);
+                for k = -l1:l1
+                    row_C2 = (k+l1)*(2*l2+1)+1 : (k+l1+1)*(2*l2+1);
+                    CG_kron = kron(CG{l1+1,l2+1}(row_C2,col_C)',...
+                            CG{l1+1,l2+1}(row_C1,col_C).');
+                    temp_l1 = temp_l1-permute(OMEGA(j+lmax+1,k+lmax+1,l1+1,:),[1,2,4,3]).*CG_kron;
                 end
             end
-            
-            temp = kron(u(ind_u,ind_u,l+1,i),eye(2*l+1,2*l+1))*temp;
-            A(row,col) = A(row,col)+temp;
+            temp_l2 = temp_l2+cl*temp_l1;
         end
+        
+        for i = 1:3
+            temp_l2(:,:,i) = kron(u(ind_u,ind_u,l+1,i),eye(2*l+1,2*l+1))*temp_l2(:,:,i);
+        end
+        A(row,col) = sum(temp_l2,3);
     end
     
     % diffusion
