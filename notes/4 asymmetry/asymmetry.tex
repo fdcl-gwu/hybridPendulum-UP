@@ -1,0 +1,100 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+
+\title{\vspace{-4ex}\textbf{Asymmetry between FFT and IFFT\vspace{-4ex}}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Grid Size}
+
+Define the grid on Euler angles as
+\begin{align*}
+	\alpha_j = \gamma_j = \frac{j\pi}{B}, \qquad \beta_k = \frac{(2k+1)\pi}{2B}, \qquad j,k=0,\ldots,2B-1.
+\end{align*}
+The forward Fourier transform is
+\begin{align*}
+	F_{m,n}^l = \sum_{k=0}^{2B-1} w_k d_{m,n}^l(\beta_k) \sum_{j_1=0}^{2B-1}e^{im\alpha_{j_1}} \sum_{j_2=0}^{2B-1} e^{in\gamma_{j_2}} f(R(\alpha_{j_1},\beta_k,\gamma_{j_2})).
+\end{align*}
+The backward Fourier transform is
+\begin{align*}
+	f(R(\alpha_{j_1},\beta_k,\gamma_{j_2})) &= \sum_{m=-B+1}^{B-1} e^{-im\alpha_{j_1}} \sum_{n=-B+1}^{B-1} e^{-in\gamma_{j_2}} \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1)F_{m,n}^l d_{m,n}^l(\beta_k) \\
+	&= \sum_{m=-B+1}^{B-1} e^{-\frac{2\pi i}{2B}mj_1} \sum_{n=-B+1}^{B-1} e^{-\frac{2\pi i}{2B}nj_2} \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1)F_{m,n}^l d_{m,n}^l(\beta_k).
+\end{align*}
+Note that the first two summations in the last equation cannot be implemented using the fft algorithm, since the number of $m$ and $n$ is $2B-1$, whereas the grid size is $2B$.
+An fft algorithm will give
+\begin{align*}
+	f_{j_1,k,j_2} = \sum_{m=-B+1}^{B-1} e^{-\frac{2\pi i}{2B-1}mj_1} \sum_{n=-B+1}^{B-1} e^{-\frac{2\pi i}{2B-1}nj_2} \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1)F_{m,n}^l d_{m,n}^l(\beta_k).
+\end{align*}
+And the resulting grid becomes
+\begin{align*}
+	\alpha_j = \gamma_j = \frac{2j\pi}{2B-1}, \qquad j = 0,\ldots,2B-2.
+\end{align*}
+In conclusion, after the backward Fourier transform, the grid size becomes one smaller.
+More importantly, since the first two summations cannot be implemented using fft, their computational cost is very high.
+
+\section{Is Backward Transform Exact?}
+Consider the usual Fourier transform on $\sph^1$.
+Let the grid be $\alpha_j = 2\pi j/N$ for $j=0,\ldots,N-1$.
+Then the forward transform is
+\begin{align*}
+	F_k = \frac{1}{N} \sum_{j=0}^{N-1} e^{-\frac{2\pi i}{N}jk} f(\alpha_j), \text{ for } k = 0,\ldots,N-1.
+\end{align*}
+And the backward transform is
+\begin{align*}
+	f_j &= \sum_{k=0}^{N-1} e^{\frac{2\pi i}{N}jk} F_k = \sum_{k=0}^{N-1} e^{\frac{2\pi i}{N}jk} \left( \frac{1}{N} \sum_{j'=0}^{N-1} e^{-\frac{2\pi i}{N}j'k} f(\alpha_{j'}) \right) = \frac{1}{N} \sum_{j'=0}^{N-1} f(\alpha_{j'}) \sum_{k=0}^{N-1} e^{\frac{2\pi i}{N}(j-j')k}.
+\end{align*}
+Note that $-N+1 \leq j-j' \leq N-1$, so for any $j\neq j'$, $e^{\frac{2\pi i}{N}(j-j')} \neq 1$, and therefore we have
+\begin{align*}
+	 \sum_{k=0}^{N-1} e^{\frac{2\pi i}{N}(j-j')k} = \frac{1-e^{\frac{2\pi i}{N}(j-j')N}}{1-e^{\frac{2\pi i}{N}(j-j')}} = 0.
+\end{align*}
+The backward transform becomes
+\begin{align*}
+	f_j = \frac{1}{N} \sum_{j'=0}^{N-1} f(\alpha_{j'})N\delta_{jj'} = f(\alpha_j).
+\end{align*}
+In conclusion, the backward Fourier transform on $\sph^1$ exactly recovers the original function values on the grid points.
+
+Now let us check the last step of the Fourier transform on $\SO$.
+Denote
+\begin{align*}
+	\tilde{f}_{m,n}(\beta_k) = \sum_{j_1=0}^{2B-1} e^{im\alpha_{j_1}} \sum_{j_2=0}^{2B-1} e^{in\gamma_{j_2}} f(R(\alpha_{j_1},\beta_k,\gamma_{j_2})).
+\end{align*}
+Then the last step for the forward transform is
+\begin{align*}
+	F_{m,n}^l = \sum_{k=0}^{2B-1} w_k d_{m,n}^l(\beta_k) \tilde{f}_{m,n}(\beta_k).
+\end{align*}
+The first step for the backward transform is
+\begin{align*}
+	\tilde{f}_{m,n,k} &= \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1) F_{m,n}^l d_{m,n}^l(\beta_k) \\
+	&= \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1) d_{m,n}^l(\beta_k) \left( \sum_{k'=0}^{2B-1} w_{k'} d_{m,n}^l(\beta_{k'}) \tilde{f}_{m,n}(\beta_{k'}) \right) \\
+	&= \sum_{k'=0}^{2B-1} w_{k'} \tilde{f}_{m,n}(\beta_{k'}) \sum_{l=\max\{|m|,|n|\}}^{B-1} (2l+1) d_{m,n}^l(\beta_k) d_{m,n}^l(\beta_{k'}).
+\end{align*}
+I have no clue to evaluate the last summation of $d$, but the simulation shows $\tilde{f}_{m,n,k} \neq \tilde{f}_{m,n}(\beta_k)$, which means the backward transform does not go back exactly.
+For smooth functions, $\tilde{f}_{m,n,k}$ and $\tilde{f}_{m,n}(\beta_k)$ match very well (after applying a scaling factor of $4B^2$); but for random function values, they match very poorly.
+I did not find any reference on the theory behind the backward transform (why it works, how is the last summation a good approximation when the function is very smooth?).
+Any suggestions on reference would be helpful.
+
+\end{document}
+
