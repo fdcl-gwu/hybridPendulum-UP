@@ -167,25 +167,18 @@ for nt = 1:T*sf
             end
         end
     else
-        S1 = zeros(2*B,2*B,2*B);
-        for ii = 1:2*B
-            for kk = 1:2*B
-                S1(ii,:,kk) = fftshift(ifft(f(:,ii,kk,nt)))*(2*B);
-            end
+        F1 = zeros(2*B,2*B,2*B);
+        for k = 1:2*B
+            F1(:,k,:) = fftn(f(:,k,:,nt));
         end
-
-        S2 = zeros(2*B,2*B,2*B);
-        for ii = 1:2*B
-            for jj = 1:2*B
-                S2(ii,jj,:) = fftshift(ifft(S1(ii,jj,:)))*(2*B);
-            end
-        end
+        F1 = fftshift(fftshift(F1,1),3);
+        F1 = flip(flip(F1,1),3);
 
         for l = 0:lmax
-            for jj = -l:l
-                for kk = -l:l
-                    F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
-                        reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+            for m = -l:l
+                for n = -l:l
+                    F(m+lmax+1,n+lmax+1,l+1,nt) = sum(w.*F1(m+lmax+1,:,n+lmax+1).*...
+                        permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]));
                 end
             end
         end
@@ -246,7 +239,7 @@ for nt = 1:T*sf
             end
         end
     else
-        S2 = zeros(2*B,2*B-1,2*B-1);
+        F1 = zeros(2*B-1,2*B,2*B-1);
         for m = -lmax:lmax
             for n = -lmax:lmax
                 lmin = max(abs(m),abs(n));
@@ -254,29 +247,19 @@ for nt = 1:T*sf
 
                 for k = 1:2*B
                     d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
-                    S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
+                    F1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
                 end
             end
         end
 
-        S1 = zeros(2*B,2*B-1,2*B);
-        for i = 1:2*B
-            for j = 1:2*B-1
-                for k = 1:2*B
-                    S1(i,j,k) = sum(exp(-1i*(-B+1:B-1)*gamma(k)).*reshape(S2(i,j,:),1,[]));
-                end
-            end
-        end
+        F1 = cat(1,F1,zeros(1,2*B,2*B-1));
+        F1 = cat(3,F1,zeros(2*B,2*B,1));
+        F1 = ifftshift(ifftshift(F1,1),3);
+        F1 = flip(flip(F1,1),3);
 
-        for i = 1:2*B
-            for j = 1:2*B
-                for k = 1:2*B
-                    f(j,i,k,nt+1) = sum(exp(-1i*(-B+1:B-1)*alpha(j)).*S1(i,:,k));
-                end
-            end
+        for k = 1:2*B
+            f(:,k,:,nt+1) = ifftn(F1(:,k,:),'symmetric')*(2*B)^2;
         end
-        
-        f(:,:,:,nt+1) = real(f(:,:,:,nt+1));
     end
 end
 

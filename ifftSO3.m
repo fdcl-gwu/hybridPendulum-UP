@@ -51,7 +51,7 @@ if isreal
     
     % real harmonic analysis
     S1 = zeros(2*B-1,2*B,2*B-1);
-    S2 = zeros(2*B-1,2*B,2*B-1);
+    F1 = zeros(2*B-1,2*B,2*B-1);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
@@ -62,7 +62,7 @@ if isreal
                 Psi2_betak = reshape(Psi(-m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
                 
                 S1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi1_betak);
-                S2(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi2_betak);
+                F1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*Psi2_betak);
             end
         end
     end
@@ -80,14 +80,14 @@ if isreal
             cmsn_n = cos(permute(-lmax:-1,[2,1])*alpha(i)).*sin(permute(0:lmax,[1,3,2])*gamma(j));
             
             for k = 1:2*B
-                f(i,k,j) = sum(sum(S2(:,k,:).*cat(3,[smsn_n;smcn_p],[smcn_n;smsn_p]),1),3)...
+                f(i,k,j) = sum(sum(F1(:,k,:).*cat(3,[smsn_n;smcn_p],[smcn_n;smsn_p]),1),3)...
                     + sum(sum(S1(:,k,:).*cat(3,[cmcn_n;cmsn_p],[cmsn_n;cmcn_p]),1),3);
             end
         end
     end
 else
     % complex harmonic analysis
-    S2 = zeros(2*B,2*B-1,2*B-1);
+    F1 = zeros(2*B-1,2*B,2*B-1);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
@@ -95,26 +95,19 @@ else
 
             for k = 1:2*B
                 d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
-                S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
+                F1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
             end
         end
     end
+    
+    F1 = cat(1,F1,zeros(1,2*B,2*B-1));
+    F1 = cat(3,F1,zeros(2*B,2*B,1));
+    F1 = ifftshift(ifftshift(F1,1),3);
+    F1 = flip(flip(F1,1),3);
 
-    S1 = zeros(2*B,2*B-1,2*B);
-    for i = 1:2*B
-        for j = 1:2*B-1
-            for k = 1:2*B
-                S1(i,j,k) = sum(exp(-1i*(-B+1:B-1)*gamma(k)).*reshape(S2(i,j,:),1,[]));
-            end
-        end
-    end
-
-    for i = 1:2*B
-        for j = 1:2*B
-            for k = 1:2*B
-                f(j,i,k) = sum(exp(-1i*(-B+1:B-1)*alpha(j)).*S1(i,:,k));
-            end
-        end
+    f = zeros(2*B,2*B,2*B);
+    for k = 1:2*B
+        f(:,k,:) = ifftn(F1(:,k,:))*(2*B)^2;
     end
 end
 

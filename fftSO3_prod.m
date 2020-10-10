@@ -209,49 +209,37 @@ if isreal
 else
     % complex analysis
     % fft for f
-    S1 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for kk = 1:2*B
-            S1(ii,:,kk) = ifftshift(ifft(f(:,ii,kk)))*(2*B);
-        end
+    F1 = zeros(2*B,2*B,2*B);
+    for k = 1:2*B
+        F1(:,k,:) = fftn(f(:,k,:));
     end
+    F1 = fftshift(fftshift(F1,1),3);
+    F1 = flip(flip(F1,1),3);
 
-    S2 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for jj = 1:2*B
-            S2(ii,jj,:) = ifftshift(ifft(S1(ii,jj,:)))*(2*B);
-        end
-    end
-
+    F = zeros(2*lmax+1,2*lmax+1,lmax+1);
     for l = 0:lmax
-        for jj = -l:l
-            for kk = -l:l
-                F(jj+lmax+1,kk+lmax+1,l+1) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
-                    reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+        for m = -l:l
+            for n = -l:l
+                F(m+lmax+1,n+lmax+1,l+1) = sum(w.*F1(m+lmax+1,:,n+lmax+1).*...
+                    permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]));
             end
         end
     end
 
     % fft for g
-    S1 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for kk = 1:2*B
-            S1(ii,:,kk) = ifftshift(ifft(g(:,ii,kk)))*(2*B);
-        end
+    G1 = zeros(2*B,2*B,2*B);
+    for k = 1:2*B
+        G1(:,k,:) = fftn(g(:,k,:));
     end
+    G1 = fftshift(fftshift(G1,1),3);
+    G1 = flip(flip(G1,1),3);
 
-    S2 = zeros(2*B,2*B,2*B);
-    for ii = 1:2*B
-        for jj = 1:2*B
-            S2(ii,jj,:) = ifftshift(ifft(S1(ii,jj,:)))*(2*B);
-        end
-    end
-
+    G = zeros(2*lmax+1,2*lmax+1,lmax+1);
     for l = 0:lmax
-        for jj = -l:l
-            for kk = -l:l
-                G(jj+lmax+1,kk+lmax+1,l+1) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
-                    reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
+        for m = -l:l
+            for n = -l:l
+                G(m+lmax+1,n+lmax+1,l+1) = sum(w.*G1(m+lmax+1,:,n+lmax+1).*...
+                    permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]));
             end
         end
     end

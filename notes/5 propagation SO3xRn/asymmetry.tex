@@ -1,0 +1,58 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\title{\vspace{-4ex}\textbf{Uncertainty Propagation on $\SO\times\real^n$\vspace{-4ex}}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+Consider the following SDE:
+\begin{align*}
+	R^T\diff{R} &= (f_1(R,x,t)\diff{t} + H_1(t)\diff{W}_{t,1})^\wedge \\
+	\diff{x} &= f_2(R,x,t)\diff{t} + H_2(t)\diff{W}_{t,2},
+\end{align*}
+where $f_1,f_2\in\real^3$, $H_1,H_2\in\real^{3\times 3}$.
+Let $G_1=\frac{1}{2}H_1H_1^T$, and $G_2=\frac{1}{2}H_2H_2^T$.
+Also, let $p(R,x,t)$ denote the probability density function at time $t$.
+Then the Fokker-Planck equation for the above SDE is
+\begin{align*}
+	\frac{\partial p}{\partial t} = &-\sum_{i=1}^3 \liediff_i(f_{1,i}(R,x,t)p(R,x,t)) - \sum_{i=1}^3 \frac{\partial }{\partial x_i} (f_{2,i}(R,x,t)p(R,x,t)) \\
+	&+ \sum_{i,j=1}^3 G_{1,ij}(t) \liediff_i\liediff_j p(R,x,t) + \sum_{i,j=1}^3 G_{2,ij}(t) \frac{\partial^2 p(R,x,t)}{\partial x_i \partial x_j}.
+\end{align*}
+
+Let the Fourier coefficient of $p(R,x,t)$ at time $t$ be $F^l_{m,n,p,q,r}[p](t)$ for $l = 0,\ldots,B-1$, $m,n = -l,\ldots,l$, and $p,q,r = 0,\ldots,2B-1$.
+Then $p(R,x,t)$ can be approximated by
+\begin{align*}
+	p(R(\alpha,\beta,\gamma),x,t) \approx \sum_{l=0}^{B-1} \sum_{m,n=-l}^l \sum_{p,q,r=-B}^{B-1} (2l+1)d_{m,n}^l(\beta) e^{-im\alpha} e^{-in\gamma} e^{\frac{2\pi px_1 i}{L}} e^{\frac{2\pi qx_2 i}{L}} e^{\frac{2\pi rx_3 i}{L}} F^l_{m,n,p,q,r}[p](t),
+\end{align*}
+where $x\in[-L/2,L/2)$.
+Substitute this into the Fokker-Planck equation and equate the Fourier coefficients on the left and right hand sides, which yields
+\begin{align*}
+	\frac{\diff{F^{l}_{m,n,p,q,r}[p](t)}}{\diff{t}} = -\sum_{i=1}^3 F^l_{m,n,p,q,r}[\liediff_if_{1,i}p](t) - \sum_{i=1}^3 F^l_{m,n,p,q,r}\left[ \frac{\partial (f_{2,i}p)}{\partial x_i} \right](t)
+\end{align*}
+
+\end{document}
+
