@@ -27,11 +27,14 @@ for m = -lmax:lmax
     end
 end
 
-f = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
+F1 = cat(1,F1,zeros(1,2*B,2*B-1,2*B,2*B,2*B));
+F1 = cat(3,F1,zeros(2*B,2*B,1,2*B,2*B,2*B));
 F1 = ifftshift(ifftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
+
+f = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
 for k = 1:2*B
-    f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:))*(2*B-1)^2;
+    f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:))*(2*B)^2;
 end
 
 end

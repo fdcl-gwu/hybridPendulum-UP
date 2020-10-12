@@ -24,9 +24,9 @@ if ~exist('func','var') || isempty(func)
 end
 
 % grid over SO(3)
-alpha = reshape(2*pi/(2*B-1)*(0:(2*B-2)),1,1,[]);
+alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
 beta = reshape(pi/(4*B)*(2*(0:(2*B-1))+1),1,1,[]);
-gamma = reshape(2*pi/(2*B-1)*(0:(2*B-2)),1,1,[]);
+gamma = reshape(pi/B*(0:(2*B-1)),1,1,[]);
 
 ca = cos(alpha);
 sa = sin(alpha);
@@ -35,14 +35,14 @@ sb = sin(beta);
 cg = cos(gamma);
 sg = sin(gamma);
 
-Ra = [ca,-sa,zeros(1,1,2*B-1);sa,ca,zeros(1,1,2*B-1);zeros(1,1,2*B-1),zeros(1,1,2*B-1),ones(1,1,2*B-1)];
+Ra = [ca,-sa,zeros(1,1,2*B);sa,ca,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
 Rb = [cb,zeros(1,1,2*B),sb;zeros(1,1,2*B),ones(1,1,2*B),zeros(1,1,2*B);-sb,zeros(1,1,2*B),cb];
-Rg = [cg,-sg,zeros(1,1,2*B-1);sg,cg,zeros(1,1,2*B-1);zeros(1,1,2*B-1),zeros(1,1,2*B-1),ones(1,1,2*B-1)];
+Rg = [cg,-sg,zeros(1,1,2*B);sg,cg,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
 
-R = zeros(3,3,2*B-1,2*B,2*B-1);
-for i = 1:2*B-1
+R = zeros(3,3,2*B,2*B,2*B);
+for i = 1:2*B
     for j = 1:2*B
-        for k = 1:2*B-1
+        for k = 1:2*B
             R(:,:,i,j,k) = Ra(:,:,i)*Rb(:,:,j)*Rg(:,:,k);
         end
     end
@@ -61,7 +61,7 @@ end
 % weights
 w = zeros(1,2*B);
 for j = 1:2*B
-    w(j) = 1/(B*(2*B-1)^2)*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
+    w(j) = 1/(4*B^3)*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
 end
 
 % Wigner_d
@@ -72,26 +72,25 @@ for j = 1:2*B
 end
 
 % function values
-R_linInd = reshape(R,3,3,(2*B)*(2*B-1)^2);
-f = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
+R_linInd = reshape(R,3,3,(2*B)^3);
+f = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
 for k = 1:2*B
     for j = 1:2*B
         parfor i = 1:2*B
-            f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*B-1,2*B,2*B-1);
+            f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*B,2*B,2*B);
         end
     end
 end
 
 % fft
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
-
-F1 = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
+F1 = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
 for k = 1:2*B
     F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
 end
 F1 = fftshift(fftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
 
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
 for l = 0:lmax
     for m = -l:l
         for n = -l:l
