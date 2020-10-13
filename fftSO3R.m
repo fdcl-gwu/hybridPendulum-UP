@@ -74,9 +74,9 @@ end
 % function values
 R_linInd = reshape(R,3,3,(2*B)^3);
 f = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
-for k = 1:2*B
+for i = 1:2*B
     for j = 1:2*B
-        parfor i = 1:2*B
+        parfor k = 1:2*B
             f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*B,2*B,2*B);
         end
     end

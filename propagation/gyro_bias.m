@@ -1,4 +1,4 @@
-function [ f, ER ] = gyro_bias( isreal )
+function [ f, stat, MFG ] = gyro_bias( isreal )
 close all;
 
 addpath('../rotation3d');
@@ -161,20 +161,62 @@ for nt = 1:Nt-1
     toc;
 end
 
-%% ER, Ex, Varx
-ER = zeros(3,3,Nt);
+%% statistics
+MFG.U = zeros(3,3,Nt);
+MFG.V = zeros(3,3,Nt);
+MFG.S = zeros(3,3,Nt);
+MFG.Miu = zeros(3,Nt);
+MFG.Sigma = zeros(3,3,Nt);
+MFG.P = zeros(3,3,Nt);
+
+stat.ER = zeros(3,3,Nt);
 for nt = 1:Nt
     fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*0.1^3;
-    ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
+    stat.ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
 end
 
-Ex = zeros(3,Nt);
-Varx = zeros(3,3,Nt);
+stat.Ex = zeros(3,Nt);
+stat.Varx = zeros(3,3,Nt);
 for nt = 1:Nt
     fx = permute(sum(f(:,:,:,:,:,:,nt).*w,[1,2,3]),[1,4,5,6,2,3]);
-    Ex(:,nt) = sum(x.*fx,[2,3,4])*0.1^3;
-    Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
-        permute(fx,[1,5,2,3,4]),[3,4,5])*0.1^3 - Ex(:,nt)*Ex(:,nt).';
+    stat.Ex(:,nt) = sum(x.*fx,[2,3,4])*0.1^3;
+    stat.Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
+        permute(fx,[1,5,2,3,4]),[3,4,5])*0.1^3 - stat.Ex(:,nt)*stat.Ex(:,nt).';
+end
+
+stat.EvR = zeros(3,Nt);
+stat.ExvR = zeros(3,3,Nt);
+stat.EvRvR = zeros(3,3,Nt);
+for nt = 1:Nt
+    [U,D,V] = psvd(stat.ER(:,:,nt));
+    s = pdf_MF_M2S(diag(D),diag(S));
+    
+    MFG.U(:,:,nt) = U;
+    MFG.V(:,:,nt) = V;
+    MFG.S(:,:,nt) = diag(s);
+    
+    Q = gather(pagefun(@mtimes,U.',pagefun(@mtimes,gpuArray(R),V)));
+    vR = permute(cat(1,s(2)*Q(3,2,:,:,:)-s(3)*Q(2,3,:,:,:),...
+        s(3)*Q(1,3,:,:,:)-s(1)*Q(3,1,:,:,:),...
+        s(1)*Q(2,1,:,:,:)-s(2)*Q(1,2,:,:,:)),[1,3,4,5,2]);
+    fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*0.1^3;
+    
+    stat.EvR(:,nt) = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
+    stat.EvRvR(:,:,nt) = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
+        permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
+    stat.ExvR(:,:,nt) = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
+        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:,nt),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*0.1^3;
+end
+
+for nt = 1:Nt
+    covxx = stat.Varx(:,:,nt);
+    covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
+    covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
+    
+    MFG.P(:,:,nt) = covxvR*covvRvR^-1;
+    MFG.Miu(:,nt) = stat.Ex(:,nt)-MFG.P(:,:,nt)*stat.EvR(:,nt);
+    MFG.Sigma(:,:,nt) = covxx-MFG.P(:,:,nt)*covxvR.'+...
+        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt)*eye(3))-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
 end
 
 rmpath('../rotation3d');
@@ -237,10 +279,10 @@ for i = 1:3
     for j = 1:3
         if i==j
             c = pi^2*[0:B-1,-B:-1].^2;
-            c = shiftdim(c,-(i+1));
+            c = -shiftdim(c,-(i+1));
         else
             c = pi*[0:B-1,0,-B+1:-1];
-            c = shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
+            c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
         end
         
         dF1 = dF1 + G2(i,j)*Fold.*c;
