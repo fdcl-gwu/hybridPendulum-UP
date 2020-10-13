@@ -51,7 +51,8 @@ Then $p(R,x,t)$ can be approximated by
 where $x\in[-L/2,L/2)$.
 Substitute this into the Fokker-Planck equation and equate the Fourier coefficients on the left and right hand sides, which yields
 \begin{align*}
-	\frac{\diff{F^{l}_{m,n,p,q,r}[p](t)}}{\diff{t}} = -\sum_{i=1}^3 F^l_{m,n,p,q,r}[\liediff_if_{1,i}p](t) - \sum_{i=1}^3 F^l_{m,n,p,q,r}\left[ \frac{\partial (f_{2,i}p)}{\partial x_i} \right](t)
+	\frac{\diff{F^{l}_{m,n,p,q,r}[p](t)}}{\diff{t}} = &-\sum_{i=1}^3 F^l_{m,n,p,q,r}[\liediff_if_{1,i}p](t) - \sum_{i=1}^3 F^l_{m,n,p,q,r}\left[ \frac{\partial (f_{2,i}p)}{\partial x_i} \right](t) \\
+	&+ \sum_{i,j=1}^3 G_{1,ij} F^l_{m,n,p,q,r}[\liediff_i\liediff_jp](t) + \sum_{i,j=1}^3 G_{2,ij} F^l_{m,n,p,q,r} \left[ \frac{\partial^2 p}{\partial x_i \partial x_j} \right](t).
 \end{align*}
 
 \end{document}
