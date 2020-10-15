@@ -1,4 +1,4 @@
-function [ stat, MFG ] = gyro_bias_MC(  )
+function [ stat, MFG, R, x ] = gyro_bias_MC(  )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');

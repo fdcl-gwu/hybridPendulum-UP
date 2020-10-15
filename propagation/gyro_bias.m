@@ -10,7 +10,7 @@ if ~exist('isreal','var') || isempty(isreal)
 end
 
 % time
-sf = 10;
+sf = 100;
 T = 1;
 Nt = T*sf+1;
 
@@ -94,7 +94,7 @@ func = @(R,x) 1/(c*sqrt((2*pi)^3*det(SigmaC)))*...
         permute(x-Miu-P*vR(R),[1,3,2]).*SigmaC^-1,1),2)),[3,2,1]);
 
 R_linInd = reshape(R,3,3,(2*B)^3);
-f = zeros(2*B,2*B,2*B,2*B,2*B,2*B,Nt);
+f = zeros(2*B,2*B,2*B,2*B,2*B,2*B,(Nt-1)/10+1);
 for k = 1:2*B
     for j = 1:2*B
         parfor i = 1:2*B
@@ -111,14 +111,16 @@ G1 = 0.5*(H1*H1.');
 G2 = 0.5*(H2*H2.');
 
 %% propagation
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B,Nt);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B,(Nt-1)/10+1);
 
+f_temp = f(:,:,:,:,:,:,1);
+F_temp = F(:,:,:,:,:,:,1);
 for nt = 1:Nt-1
     tic;
     % forward
     F1 = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
     for k = 1:2*B
-        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:,nt));
+        F1(:,k,:,:,:,:) = fftn(f_temp(:,k,:,:,:,:));
     end
     F1 = fftshift(fftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
@@ -126,21 +128,21 @@ for nt = 1:Nt-1
     for l = 0:lmax
         for m = -l:l
             for n = -l:l
-                F(m+lmax+1,n+lmax+1,l+1,:,:,:,nt) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                F_temp(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
                     permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
             end
         end
     end
     
     % propagating Fourier coefficients
-    F(:,:,:,:,:,:,nt+1) = integrate(F(:,:,:,:,:,:,nt),X,1/sf,u,G1,G2);
+    F_temp = integrate(F_temp,X,1/sf,u,G1,G2);
     
     % backward
     F1 = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
-            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:,nt+1);
+            F_mn = F_temp(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
 
             for k = 1:2*B
                 d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
@@ -155,39 +157,44 @@ for nt = 1:Nt-1
     F1 = ifftshift(ifftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
     for k = 1:2*B
-        f(:,k,:,:,:,:,nt+1) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*B)^2;
+        f_temp(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*B)^2;
+    end
+    
+    if rem(nt,10)==0
+        f(:,:,:,:,:,:,nt/10+1) = f_temp;
+        F(:,:,:,:,:,:,nt/10+1) = F_temp;
     end
     
     toc;
 end
 
 %% statistics
-MFG.U = zeros(3,3,Nt);
-MFG.V = zeros(3,3,Nt);
-MFG.S = zeros(3,3,Nt);
-MFG.Miu = zeros(3,Nt);
-MFG.Sigma = zeros(3,3,Nt);
-MFG.P = zeros(3,3,Nt);
+MFG.U = zeros(3,3,(Nt-1)/10+1);
+MFG.V = zeros(3,3,(Nt-1)/10+1);
+MFG.S = zeros(3,3,(Nt-1)/10+1);
+MFG.Miu = zeros(3,(Nt-1)/10+1);
+MFG.Sigma = zeros(3,3,(Nt-1)/10+1);
+MFG.P = zeros(3,3,(Nt-1)/10+1);
 
-stat.ER = zeros(3,3,Nt);
-for nt = 1:Nt
+stat.ER = zeros(3,3,(Nt-1)/10+1);
+for nt = 1:(Nt-1)/10+1
     fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*0.1^3;
     stat.ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
 end
 
-stat.Ex = zeros(3,Nt);
-stat.Varx = zeros(3,3,Nt);
-for nt = 1:Nt
+stat.Ex = zeros(3,(Nt-1)/10+1);
+stat.Varx = zeros(3,3,(Nt-1)/10+1);
+for nt = 1:(Nt-1)/10+1
     fx = permute(sum(f(:,:,:,:,:,:,nt).*w,[1,2,3]),[1,4,5,6,2,3]);
     stat.Ex(:,nt) = sum(x.*fx,[2,3,4])*0.1^3;
     stat.Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
         permute(fx,[1,5,2,3,4]),[3,4,5])*0.1^3 - stat.Ex(:,nt)*stat.Ex(:,nt).';
 end
 
-stat.EvR = zeros(3,Nt);
-stat.ExvR = zeros(3,3,Nt);
-stat.EvRvR = zeros(3,3,Nt);
-for nt = 1:Nt
+stat.EvR = zeros(3,(Nt-1)/10+1);
+stat.ExvR = zeros(3,3,(Nt-1)/10+1);
+stat.EvRvR = zeros(3,3,(Nt-1)/10+1);
+for nt = 1:(Nt-1)/10+1
     [U,D,V] = psvd(stat.ER(:,:,nt));
     s = pdf_MF_M2S(diag(D),diag(S));
     
@@ -208,7 +215,7 @@ for nt = 1:Nt
         permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:,nt),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*0.1^3;
 end
 
-for nt = 1:Nt
+for nt = 1:(Nt-1)/10+1
     covxx = stat.Varx(:,:,nt);
     covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
     covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
