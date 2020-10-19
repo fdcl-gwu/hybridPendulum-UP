@@ -66,10 +66,10 @@ for j = 1:2*B
 end
 
 % derivatives
-u = getu(lmax,isreal);
+u = gpuArray(getu(lmax,isreal));
 
 % Fourier transform of x
-X = zeros(2*B,2*B,2*B,3);
+X = gpuArray.zeros(2*B,2*B,2*B,3);
 for i = 1:3
     X(:,:,:,i) = fftn(x(i,:,:,:));
 end
@@ -169,31 +169,31 @@ for nt = 1:Nt-1
 end
 
 %% statistics
-MFG.U = zeros(3,3,(Nt-1)/10+1);
-MFG.V = zeros(3,3,(Nt-1)/10+1);
-MFG.S = zeros(3,3,(Nt-1)/10+1);
-MFG.Miu = zeros(3,(Nt-1)/10+1);
-MFG.Sigma = zeros(3,3,(Nt-1)/10+1);
-MFG.P = zeros(3,3,(Nt-1)/10+1);
+MFG.U = zeros(3,3,Nt);
+MFG.V = zeros(3,3,Nt);
+MFG.S = zeros(3,3,Nt);
+MFG.Miu = zeros(3,Nt);
+MFG.Sigma = zeros(3,3,Nt);
+MFG.P = zeros(3,3,Nt);
 
-stat.ER = zeros(3,3,(Nt-1)/10+1);
-for nt = 1:(Nt-1)/10+1
+stat.ER = zeros(3,3,Nt);
+for nt = 1:Nt
     fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*0.1^3;
     stat.ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
 end
 
-stat.Ex = zeros(3,(Nt-1)/10+1);
-stat.Varx = zeros(3,3,(Nt-1)/10+1);
-for nt = 1:(Nt-1)/10+1
+stat.Ex = zeros(3,Nt);
+stat.Varx = zeros(3,3,Nt);
+for nt = 1:Nt
     fx = permute(sum(f(:,:,:,:,:,:,nt).*w,[1,2,3]),[1,4,5,6,2,3]);
     stat.Ex(:,nt) = sum(x.*fx,[2,3,4])*0.1^3;
     stat.Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
         permute(fx,[1,5,2,3,4]),[3,4,5])*0.1^3 - stat.Ex(:,nt)*stat.Ex(:,nt).';
 end
 
-stat.EvR = zeros(3,(Nt-1)/10+1);
-stat.ExvR = zeros(3,3,(Nt-1)/10+1);
-stat.EvRvR = zeros(3,3,(Nt-1)/10+1);
+stat.EvR = zeros(3,Nt);
+stat.ExvR = zeros(3,3,Nt);
+stat.EvRvR = zeros(3,3,Nt);
 for nt = 1:(Nt-1)/10+1
     [U,D,V] = psvd(stat.ER(:,:,nt));
     s = pdf_MF_M2S(diag(D),diag(S));
@@ -215,7 +215,7 @@ for nt = 1:(Nt-1)/10+1
         permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:,nt),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*0.1^3;
 end
 
-for nt = 1:(Nt-1)/10+1
+for nt = 1:Nt
     covxx = stat.Varx(:,:,nt);
     covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
     covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
@@ -239,11 +239,11 @@ B = size(Fold,3);
 lmax = B-1;
 
 Fold = gpuArray(Fold);
-X = gpuArray(X);
-u = gpuArray(u);
 
 % gyro bias
-dF1 = gpuArray.zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
+temp1 = gpuArray.zeros(size(Fold));
+temp2 = gpuArray.zeros(size(Fold));
+temp3 = gpuArray.zeros(size(Fold));
 for ix = 1:2*B
     for jx = 1:2*B
         for kx = 1:2*B
@@ -253,21 +253,23 @@ for ix = 1:2*B
             X_ijk = circshift(X_ijk,kx,3);
             X_ijk = permute(X_ijk,[5,6,7,1,2,3,4]);
             
-            for l = 0:lmax
-                indmn = -l+lmax+1:l+lmax+1;
-                temp1 = sum(X_ijk(:,:,:,:,:,:,1).*...
-                    Fold(indmn,indmn,l+1,:,:,:),[4,5,6])/(2*B)^3;
-                temp2 = sum(X_ijk(:,:,:,:,:,:,2).*...
-                    Fold(indmn,indmn,l+1,:,:,:),[4,5,6])/(2*B)^3;
-                temp3 = sum(X_ijk(:,:,:,:,:,:,3).*...
-                    Fold(indmn,indmn,l+1,:,:,:),[4,5,6])/(2*B)^3;
-                
-                dF1(indmn,indmn,l+1,ix,jx,kx) = -temp1*u(indmn,indmn,l+1,1).'-...
-                    temp2*u(indmn,indmn,l+1,2).'-temp3*u(indmn,indmn,l+1,3).';
-            end
+            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*B)^3;
+            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*B)^3;
+            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*B)^3;
         end
     end
 end
+
+dF1 = gpuArray.zeros(size(Fold));
+for l = 0:lmax
+    indmn = -l+lmax+1:l+lmax+1;
+    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,ix,jx,kx)-...
+        pagefun(@mtimes,temp1(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,1).')-...
+        pagefun(@mtimes,temp2(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,2).')-...
+        pagefun(@mtimes,temp3(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
+end
+
+clear temp1 temp2 temp3
 
 % gyro random walk
 for l = 0:lmax
