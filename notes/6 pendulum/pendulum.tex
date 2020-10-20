@@ -1,0 +1,40 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\title{\vspace{-4ex}\textbf{Uncertainty Propagation for a 3D Pendulum\vspace{-4ex}}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+The dynamical model for a hinged 3D pendulum is
+\begin{align*}
+	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
+	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + H\diff{W}_t,
+\end{align*}
+where $J\in\real^{3\times 3}$ is the moment of inertia matrix, $\rho$ is the vector from the pivot point to the center of mass expressed in the body-fixed frame.
+
+\end{document}
+

@@ -1,0 +1,46 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\title{\vspace{-4ex}\textbf{Fokker-Planck Equation for the Log-density Function\vspace{-4ex}}}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+The usual Fokker-Planck equation for the density function $f(x,t)$ is
+\begin{align*}
+	\frac{\partial f}{\partial t} = -\sum_{i=1}^n \frac{\partial (\mu_if)}{\partial x_i} + \sum_{i,j=1}^n \frac{\partial^2 (D_{ij}f)}{\partial x_i \partial x_j}.
+\end{align*}
+Suppose $f>0$ and let $f = e^g$, then we have:
+\begin{align*}
+	e^g \frac{\partial g}{\partial t} = -e^g \sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + e^g \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right).
+\end{align*}
+So $g$ satisfies the following partial differential equation:
+\begin{align*}
+	\frac{\partial g}{\partial t} = \sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right)
+\end{align*}
+
+\end{document}
+

@@ -169,31 +169,31 @@ for nt = 1:Nt-1
 end
 
 %% statistics
-MFG.U = zeros(3,3,Nt);
-MFG.V = zeros(3,3,Nt);
-MFG.S = zeros(3,3,Nt);
-MFG.Miu = zeros(3,Nt);
-MFG.Sigma = zeros(3,3,Nt);
-MFG.P = zeros(3,3,Nt);
+MFG.U = zeros(3,3,(Nt-1)/10+1);
+MFG.V = zeros(3,3,(Nt-1)/10+1);
+MFG.S = zeros(3,3,(Nt-1)/10+1);
+MFG.Miu = zeros(3,(Nt-1)/10+1);
+MFG.Sigma = zeros(3,3,(Nt-1)/10+1);
+MFG.P = zeros(3,3,(Nt-1)/10+1);
 
-stat.ER = zeros(3,3,Nt);
-for nt = 1:Nt
+stat.ER = zeros(3,3,(Nt-1)/10+1);
+for nt = 1:(Nt-1)/10+1
     fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*0.1^3;
     stat.ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
 end
 
-stat.Ex = zeros(3,Nt);
-stat.Varx = zeros(3,3,Nt);
-for nt = 1:Nt
+stat.Ex = zeros(3,(Nt-1)/10+1);
+stat.Varx = zeros(3,3,(Nt-1)/10+1);
+for nt = 1:(Nt-1)/10+1
     fx = permute(sum(f(:,:,:,:,:,:,nt).*w,[1,2,3]),[1,4,5,6,2,3]);
     stat.Ex(:,nt) = sum(x.*fx,[2,3,4])*0.1^3;
     stat.Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
         permute(fx,[1,5,2,3,4]),[3,4,5])*0.1^3 - stat.Ex(:,nt)*stat.Ex(:,nt).';
 end
 
-stat.EvR = zeros(3,Nt);
-stat.ExvR = zeros(3,3,Nt);
-stat.EvRvR = zeros(3,3,Nt);
+stat.EvR = zeros(3,(Nt-1)/10+1);
+stat.ExvR = zeros(3,3,(Nt-1)/10+1);
+stat.EvRvR = zeros(3,3,(Nt-1)/10+1);
 for nt = 1:(Nt-1)/10+1
     [U,D,V] = psvd(stat.ER(:,:,nt));
     s = pdf_MF_M2S(diag(D),diag(S));
@@ -215,7 +215,7 @@ for nt = 1:(Nt-1)/10+1
         permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:,nt),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*0.1^3;
 end
 
-for nt = 1:Nt
+for nt = 1:(Nt-1)/10+1
     covxx = stat.Varx(:,:,nt);
     covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
     covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
