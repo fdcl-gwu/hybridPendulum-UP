@@ -3,7 +3,7 @@ function [ stat, MFG, R, x ] = pendulum_MC(  )
 addpath('../matrix Fisher');
 addpath('../rotation3d');
 
-Ns = 10000;
+Ns = 100000;
 
 % parameters
 Jd = diag([1,2,3]);
@@ -15,17 +15,17 @@ g = 9.8;
 
 % time
 sf = 100;
-T = 10;
+T = 0.1;
 Nt = T*sf+1;
 
 % initial conditions
-S = diag([10,10,10]);
+S = diag([4,4,4]);
 U = expRot([pi*2/3,0,0]);
 R = zeros(3,3,Ns,Nt);
 R(:,:,:,1) = gather(pdf_MF_sampling_gpu(U*S,Ns));
 
-Miu = [0;0;0.2];
-Sigma = diag([0.2^2,0.2^2,0.2^2]);
+Miu = [0;0;0];
+Sigma = 1^2*eye(3);
 x = zeros(3,Ns,Nt);
 x(:,:,1) = mvnrnd(Miu,Sigma,Ns)';
 
@@ -47,25 +47,25 @@ for nt = 1:Nt-1
 end
 
 % statistics
-MFG.U = zeros(3,3,(Nt-1)/10+1);
-MFG.V = zeros(3,3,(Nt-1)/10+1);
-MFG.S = zeros(3,3,(Nt-1)/10+1);
-MFG.Miu = zeros(3,(Nt-1)/10+1);
-MFG.Sigma = zeros(3,3,(Nt-1)/10+1);
-MFG.P = zeros(3,3,(Nt-1)/10+1);
+MFG.U = zeros(3,3,Nt);
+MFG.V = zeros(3,3,Nt);
+MFG.S = zeros(3,3,Nt);
+MFG.Miu = zeros(3,Nt);
+MFG.Sigma = zeros(3,3,Nt);
+MFG.P = zeros(3,3,Nt);
 
-stat.ER = zeros(3,3,(Nt-1)/10+1);
-stat.Ex = zeros(3,(Nt-1)/10+1);
-stat.Varx = zeros(3,3,(Nt-1)/10+1);
-stat.EvR = zeros(3,(Nt-1)/10+1);
-stat.ExvR = zeros(3,3,(Nt-1)/10+1);
-stat.EvRvR = zeros(3,3,(Nt-1)/10+1);
+stat.ER = zeros(3,3,Nt);
+stat.Ex = zeros(3,Nt);
+stat.Varx = zeros(3,3,Nt);
+stat.EvR = zeros(3,Nt);
+stat.ExvR = zeros(3,3,Nt);
+stat.EvRvR = zeros(3,3,Nt);
 
-for nt = 1:(Nt-1)/10+1
-    stat.ER(:,:,nt) = sum(R(:,:,:,1+(nt-1)*10),3)/Ns;
-    stat.Ex(:,nt) = sum(x(:,:,1+(nt-1)*10),2)/Ns;
-    stat.Varx(:,:,nt) = sum(permute(x(:,:,1+(nt-1)*10),[1,3,2]).*...
-        permute(x(:,:,1+(nt-1)*10),[3,1,2]),3)/Ns - stat.Ex(:,nt)*stat.Ex(:,nt).';
+for nt = 1:Nt
+    stat.ER(:,:,nt) = sum(R(:,:,:,nt),3)/Ns;
+    stat.Ex(:,nt) = sum(x(:,:,nt),2)/Ns;
+    stat.Varx(:,:,nt) = sum(permute(x(:,:,nt),[1,3,2]).*...
+        permute(x(:,:,nt),[3,1,2]),3)/Ns - stat.Ex(:,nt)*stat.Ex(:,nt).';
     
     [U,D,V] = psvd(stat.ER(:,:,nt));
     s = pdf_MF_M2S(diag(D),diag(S));
@@ -74,7 +74,7 @@ for nt = 1:(Nt-1)/10+1
     MFG.V(:,:,nt) = V;
     MFG.S(:,:,nt) = diag(s);
     
-    Q = mulRot(U',mulRot(R(:,:,:,1+(nt-1)*10),V));
+    Q = mulRot(U',mulRot(R(:,:,:,nt),V));
     vR = permute(cat(1,s(2)*Q(3,2,:)-s(3)*Q(2,3,:),...
         s(3)*Q(1,3,:)-s(1)*Q(3,1,:),s(1)*Q(2,1,:)-s(2)*Q(1,2,:)),[1,3,2]);
     
@@ -89,7 +89,7 @@ for nt = 1:(Nt-1)/10+1
     MFG.P(:,:,nt) = covxvR*covvRvR^-1;
     MFG.Miu(:,nt) = stat.Ex(:,nt)-MFG.P(:,:,nt)*stat.EvR(:,nt);
     MFG.Sigma(:,:,nt) = covxx-MFG.P(:,:,nt)*covxvR.'+...
-        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt)*eye(3))-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
+        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt))*eye(3)-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
 end
 
 rmpath('../matrix Fisher');

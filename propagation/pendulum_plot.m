@@ -2,8 +2,6 @@ function [  ] = pendulum_plot( R )
 
 close all;
 
-figure;
-
 Nt = size(R,3);
 for nt = 1:Nt
     f = figure; hold on;
@@ -22,7 +20,7 @@ for nt = 1:Nt
     close(f);
 end
 
-v = VideoWriter('R2.avi');
+v = VideoWriter('R1.avi');
 v.FrameRate = 100;
 v.Quality = 100;
 open(v);
