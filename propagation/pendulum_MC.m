@@ -11,11 +11,11 @@ J = trace(Jd)*eye(3)-Jd;
 
 rho = [0;0;1];
 m = 10;
-g = 9.8;
+g = 3;
 
 % time
 sf = 100;
-T = 0.1;
+T = 1;
 Nt = T*sf+1;
 
 % initial conditions

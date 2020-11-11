@@ -1,4 +1,4 @@
-function [ F, f ] = fftSO3R( func, B, isreal )
+function [ F, f ] = fftSO3R( func, BR, Bx, isreal )
 
 addpath('matrix Fisher');
 addpath('rotation3d');
@@ -24,9 +24,9 @@ if ~exist('func','var') || isempty(func)
 end
 
 % grid over SO(3)
-alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
-beta = reshape(pi/(4*B)*(2*(0:(2*B-1))+1),1,1,[]);
-gamma = reshape(pi/B*(0:(2*B-1)),1,1,[]);
+alpha = reshape(pi/BR*(0:(2*BR-1)),1,1,[]);
+beta = reshape(pi/(4*BR)*(2*(0:(2*BR-1))+1),1,1,[]);
+gamma = reshape(pi/BR*(0:(2*BR-1)),1,1,[]);
 
 ca = cos(alpha);
 sa = sin(alpha);
@@ -35,62 +35,63 @@ sb = sin(beta);
 cg = cos(gamma);
 sg = sin(gamma);
 
-Ra = [ca,-sa,zeros(1,1,2*B);sa,ca,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
-Rb = [cb,zeros(1,1,2*B),sb;zeros(1,1,2*B),ones(1,1,2*B),zeros(1,1,2*B);-sb,zeros(1,1,2*B),cb];
-Rg = [cg,-sg,zeros(1,1,2*B);sg,cg,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
+Ra = [ca,-sa,zeros(1,1,2*BR);sa,ca,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*BR),ones(1,1,2*BR)];
+Rb = [cb,zeros(1,1,2*BR),sb;zeros(1,1,2*BR),ones(1,1,2*BR),zeros(1,1,2*BR);-sb,zeros(1,1,2*BR),cb];
+Rg = [cg,-sg,zeros(1,1,2*BR);sg,cg,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*BR),ones(1,1,2*BR)];
 
-R = zeros(3,3,2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        for k = 1:2*B
+R = zeros(3,3,2*BR,2*BR,2*BR);
+for i = 1:2*BR
+    for j = 1:2*BR
+        for k = 1:2*BR
             R(:,:,i,j,k) = Ra(:,:,i)*Rb(:,:,j)*Rg(:,:,k);
         end
     end
 end
 
 % grid over R^3
-x = zeros(3,2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        for k = 1:2*B
-            x(:,i,j,k) = [-1+2/(2*B)*(i-1);-1+2/(2*B)*(j-1);-1+2/(2*B)*(k-1)];
+x = zeros(3,2*Bx,2*Bx,2*Bx);
+L = 2;
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            x(:,i,j,k) = [-L/2+L/(2*Bx)*(i-1);-L/2+2/(2*Bx)*(j-1);-L/2+2/(2*Bx)*(k-1)];
         end
     end
 end
 
 % weights
-w = zeros(1,2*B);
-for j = 1:2*B
-    w(j) = 1/(4*B^3)*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
+w = zeros(1,2*BR);
+for j = 1:2*BR
+    w(j) = 1/(4*BR^3)*sin(beta(j))*sum(1./(2*(0:BR-1)+1).*sin((2*(0:BR-1)+1)*beta(j)));
 end
 
 % Wigner_d
-lmax = B-1;
-d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-for j = 1:2*B
+lmax = BR-1;
+d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*BR);
+for j = 1:2*BR
     d(:,:,:,j) = Wigner_d(beta(j),lmax);
 end
 
 % function values
-R_linInd = reshape(R,3,3,(2*B)^3);
-f = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        parfor k = 1:2*B
-            f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*B,2*B,2*B);
+R_linInd = reshape(R,3,3,(2*BR)^3);
+f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        parfor k = 1:2*Bx
+            f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*BR,2*BR,2*BR);
         end
     end
 end
 
 % fft
-F1 = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
-for k = 1:2*B
+F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+for k = 1:2*BR
     F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
 end
 F1 = fftshift(fftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
 
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for l = 0:lmax
     for m = -l:l
         for n = -l:l

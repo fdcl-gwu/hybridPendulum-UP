@@ -1,5 +1,4 @@
 function [ f, stat, MFG ] = pendulum( isreal )
-close all;
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -11,7 +10,7 @@ end
 
 % time
 sf = 100;
-T = 0.1;
+T = 1;
 Nt = T*sf+1;
 
 % parameters
@@ -20,7 +19,7 @@ J = trace(Jd)*eye(3)-Jd;
 
 rho = [0;0;1];
 m = 10;
-g = 9.8;
+g = 3;
 
 % band limit
 B = 10;
@@ -139,21 +138,39 @@ Sigma = 1^2*eye(3);
 
 c = pdf_MF_normal(diag(S));
 
-f = zeros(2*B,2*B,2*B,2*B,2*B,2*B,Nt);
+f = zeros(2*B,2*B,2*B,2*B,2*B,2*B,(Nt-1)/(sf/10)+1);
 f(:,:,:,:,:,:,1) = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     permute(exp(sum(-0.5*permute((x-Miu),[1,5,2,3,4]).*permute((x-Miu),...
     [5,1,2,3,4]).*Sigma^-1,[1,2])),[1,2,6,3,4,5])/c/sqrt((2*pi)^3*det(Sigma));
 
-%% propagation
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B,Nt);
+% pre-allocate memory
+U = zeros(3,3,Nt);
+V = zeros(3,3,Nt);
+S = zeros(3,3,Nt);
+Miu = zeros(3,Nt);
+Sigma = zeros(3,3,Nt);
+P = zeros(3,3,Nt);
 
+ER = zeros(3,3,Nt);
+Ex = zeros(3,Nt);
+Varx = zeros(3,3,Nt);
+EvR = zeros(3,Nt);
+ExvR = zeros(3,3,Nt);
+EvRvR = zeros(3,3,Nt);
+
+[ER(:,:,1),Ex(:,1),Varx(:,:,1),EvR(:,1),ExvR(:,:,1),EvRvR(:,:,1),...
+    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f(:,:,:,:,:,:,1),R,x,w);
+
+%% propagation
+f_temp = f(:,:,:,:,:,:,1);
+F_temp = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
 for nt = 1:Nt-1
     tic;
     
     % forward
     F1 = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
     for k = 1:2*B
-        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:,nt));
+        F1(:,k,:,:,:,:) = fftn(f_temp(:,k,:,:,:,:));
     end
     F1 = fftshift(fftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
@@ -161,21 +178,21 @@ for nt = 1:Nt-1
     for l = 0:lmax
         for m = -l:l
             for n = -l:l
-                F(m+lmax+1,n+lmax+1,l+1,:,:,:,nt) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                F_temp(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
                     permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
             end
         end
     end
     
     % propagating Fourier coefficients
-    F(:,:,:,:,:,:,nt+1) = integrate(F(:,:,:,:,:,:,nt),X,OJO,MR,1/sf,L,u,CG);
+    F_temp = integrate(F_temp,X,OJO,MR,1/sf,L,u,CG);
     
     % backward
     F1 = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
-            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:,nt+1);
+            F_mn = F_temp(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
 
             for k = 1:2*B
                 d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
@@ -190,69 +207,36 @@ for nt = 1:Nt-1
     F1 = ifftshift(ifftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
     for k = 1:2*B
-        f(:,k,:,:,:,:,nt+1) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*B)^2;
+        f_temp(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*B)^2;
     end
+    
+    if rem(nt,sf/10)==0
+        f(:,:,:,:,:,:,nt/(sf/10)+1) = f_temp;
+    end
+    
+    [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
+        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f_temp,R,x,w);
     
     toc;
 end
 
-%% statistics
-MFG.U = zeros(3,3,Nt);
-MFG.V = zeros(3,3,Nt);
-MFG.S = zeros(3,3,Nt);
-MFG.Miu = zeros(3,Nt);
-MFG.Sigma = zeros(3,3,Nt);
-MFG.P = zeros(3,3,Nt);
+stat.ER = ER;
+stat.Ex = Ex;
+stat.Varx = Varx;
+stat.EvR = EvR;
+stat.ExvR = ExvR;
+stat.EvRvR = EvRvR;
 
-stat.ER = zeros(3,3,Nt);
-for nt = 1:Nt
-    fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*(L/2/B)^3;
-    stat.ER(:,:,nt) = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
-end
+MFG.U = U;
+MFG.S = S;
+MFG.V = V;
+MFG.Miu = Miu;
+MFG.Sigma = Sigma;
+MFG.P = P;
 
-stat.Ex = zeros(3,Nt);
-stat.Varx = zeros(3,3,Nt);
-for nt = 1:Nt
-    fx = permute(sum(f(:,:,:,:,:,:,nt).*w,[1,2,3]),[1,4,5,6,2,3]);
-    stat.Ex(:,nt) = sum(x.*fx,[2,3,4])*(L/2/B)^3;
-    stat.Varx(:,:,nt) = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
-        permute(fx,[1,5,2,3,4]),[3,4,5])*(L/2/B)^3 - stat.Ex(:,nt)*stat.Ex(:,nt).';
-end
-
-stat.EvR = zeros(3,Nt);
-stat.ExvR = zeros(3,3,Nt);
-stat.EvRvR = zeros(3,3,Nt);
-for nt = 1:Nt
-    [U,D,V] = psvd(stat.ER(:,:,nt));
-    s = pdf_MF_M2S(diag(D),diag(S));
-    
-    MFG.U(:,:,nt) = U;
-    MFG.V(:,:,nt) = V;
-    MFG.S(:,:,nt) = diag(s);
-    
-    Q = gather(pagefun(@mtimes,U.',pagefun(@mtimes,gpuArray(R),V)));
-    vR = permute(cat(1,s(2)*Q(3,2,:,:,:)-s(3)*Q(2,3,:,:,:),...
-        s(3)*Q(1,3,:,:,:)-s(1)*Q(3,1,:,:,:),...
-        s(1)*Q(2,1,:,:,:)-s(2)*Q(1,2,:,:,:)),[1,3,4,5,2]);
-    fR = sum(f(:,:,:,:,:,:,nt),[4,5,6])*(L/2/B)^3;
-    
-    stat.EvR(:,nt) = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
-    stat.EvRvR(:,:,nt) = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
-        permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
-    stat.ExvR(:,:,nt) = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
-        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:,nt),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/B)^3;
-end
-
-for nt = 1:Nt
-    covxx = stat.Varx(:,:,nt);
-    covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
-    covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
-    
-    MFG.P(:,:,nt) = covxvR*covvRvR^-1;
-    MFG.Miu(:,nt) = stat.Ex(:,nt)-MFG.P(:,:,nt)*stat.EvR(:,nt);
-    MFG.Sigma(:,:,nt) = covxx-MFG.P(:,:,nt)*covxvR.'+...
-        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt))*eye(3)-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
-end
+save('D:f','f','-v7.3');
+save('D:stat','stat','-v7.3');
+save('D:MFG','MFG','-v7.3');
 
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
@@ -387,6 +371,55 @@ elseif n > B && n < 2*B
     c = 2*pi*1i*(n-2*B)/L;
 else
     error('n out of range');
+end
+
+end
+
+
+function [ ER, Ex, Varx, EvR, ExvR, EvRvR, U, S, V, P, Miu, Sigma ] = get_stat( f, R, x, w )
+
+B = size(R,3)/2;
+L = x(1,end,1,1)+x(1,2,1,1)-2*x(1,1,1,1);
+
+fR = sum(f(:,:,:,:,:,:),[4,5,6])*(L/2/B)^3;
+ER = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
+
+fx = permute(sum(f(:,:,:,:,:,:).*w,[1,2,3]),[1,4,5,6,2,3]);
+Ex = sum(x.*fx,[2,3,4])*(L/2/B)^3;
+Varx = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
+    permute(fx,[1,5,2,3,4]),[3,4,5])*(L/2/B)^3 - Ex*Ex.';
+
+[U,D,V] = psvd(ER);
+try
+    s = pdf_MF_M2S(diag(D),[0;0;0]);
+    S = diag(s);
+
+    Q = gather(pagefun(@mtimes,U.',pagefun(@mtimes,gpuArray(R),V)));
+    vR = permute(cat(1,s(2)*Q(3,2,:,:,:)-s(3)*Q(2,3,:,:,:),...
+        s(3)*Q(1,3,:,:,:)-s(1)*Q(3,1,:,:,:),...
+        s(1)*Q(2,1,:,:,:)-s(2)*Q(1,2,:,:,:)),[1,3,4,5,2]);
+
+    EvR = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
+    EvRvR = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
+        permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
+    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
+        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/B)^3;
+
+    covxx = Varx;
+    covxvR = ExvR-Ex*EvR.';
+    covvRvR = EvRvR-EvR*EvR.';
+
+    P = covxvR*covvRvR^-1;
+    Miu = Ex-P*EvR;
+    Sigma = covxx-P*covxvR.'+P*(trace(S)*eye(3)-S)*P.';
+catch
+    S = NaN(3,3);
+    EvR = NaN(3,1);
+    EvRvR = NaN(3,3);
+    ExvR = NaN(3,3);
+    P = NaN(3,3);
+    Miu = NaN(3,1);
+    Sigma = NaN(3,3);
 end
 
 end
