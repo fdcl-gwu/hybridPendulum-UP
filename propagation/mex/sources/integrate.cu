@@ -56,6 +56,16 @@ __global__ void derivate(cuDoubleComplex* temp, cuDoubleComplex* u, cuDoubleComp
 	}
 }
 
+__global__ void add_dF(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt)
+{
+	long i = blockIdx.x*blockDim.x + threadIdx.x;
+
+	if (i < nTot) {
+		Fnew[i].x = Fold[i].x + dt*Fnew[i].x;
+		Fnew[i].y = Fold[i].y + dt*Fnew[i].y;
+	}
+}
+
 __host__ void cudaErrorHandle(const cudaError_t& err)
 {
 	if (err != cudaSuccess) {

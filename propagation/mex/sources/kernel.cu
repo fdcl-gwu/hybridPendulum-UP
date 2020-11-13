@@ -29,7 +29,9 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaMalloc(&X_ijk_dev, 3*nx*sizeof(cuDoubleComplex)));
     cudaErrorHandle(cudaMemcpy(X_dev, X, 3*nx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-    cuDoubleComplex* u = (cuDoubleComplex*) mxGetComplexDoubles(prhs[2]);
+    double* dt = mxGetDoubles(prhs[2]);
+
+    cuDoubleComplex* u = (cuDoubleComplex*) mxGetComplexDoubles(prhs[3]);
     cuDoubleComplex* u_dev;
     cudaErrorHandle(cudaMalloc(&u_dev, 3*nR*sizeof(cuDoubleComplex)));
     cudaErrorHandle(cudaMemcpy(u_dev, u, 3*nR*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
@@ -44,6 +46,9 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
     dim3 blocksize_u(2*lmax+1, 2*lmax+1, 1);
     dim3 gridsize_u(lmax+1, 1, 1);
+
+    dim3 blocksize_add(512,1,1);
+    dim3 gridsize_add(ceil((double) nTot/512),1,1);
 
     /* set up tensors */
     int mode_Fold[6] = {'m','n','l','i','j','k'};
@@ -120,6 +125,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             }
         }
     }
+
+    add_dF <<<gridsize_add, blocksize_add>>> (Fnew_dev, Fold_dev, dt[0]);
 
     cudaMemcpy(Fnew, Fnew_dev, nTot*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 

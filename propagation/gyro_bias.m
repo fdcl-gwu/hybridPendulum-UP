@@ -1,4 +1,4 @@
-function [ f, stat, MFG ] = gyro_bias( isreal )
+function [ f, stat, MFG ] = gyro_bias( isreal, use_mex )
 close all;
 
 addpath('../rotation3d');
@@ -7,6 +7,14 @@ addpath('..');
 
 if ~exist('isreal','var') || isempty(isreal)
     isreal = false;
+end
+
+if ~exist('use_mex','var') || isempty(use_mex)
+    use_mex = false;
+end
+
+if use_mex
+    addpath('mex');
 end
 
 % time
@@ -68,12 +76,19 @@ for j = 1:2*BR
 end
 
 % derivatives
-u = gpuArray(getu(lmax,isreal));
+u = getu(lmax,isreal);
+if ~use_mex
+    u = gpuArray(u);
+end
 
 % Fourier transform of x
-X = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3);
+X = zeros(2*Bx,2*Bx,2*Bx,3);
 for i = 1:3
     X(:,:,:,i) = fftn(x(i,:,:,:));
+end
+
+if ~use_mex
+    X = gpuArray(X);
 end
 
 % initial condition
@@ -118,6 +133,8 @@ F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,(Nt-1)/10+1);
 f_temp = f(:,:,:,:,:,:,1);
 F_temp = F(:,:,:,:,:,:,1);
 for nt = 1:Nt-1
+    tic;
+    
     % forward
     F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
     for k = 1:2*BR
@@ -136,7 +153,11 @@ for nt = 1:Nt-1
     end
     
     % propagating Fourier coefficients
-    F_temp = integrate(F_temp,X,1/sf,u,G1,G2);
+    if use_mex
+        F_temp = propagate_mex(F_temp,X,1/sf,u);
+    else
+        F_temp = integrate(F_temp,X,1/sf,u,G1,G2);
+    end
     
     % backward
     F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
@@ -165,6 +186,8 @@ for nt = 1:Nt-1
         f(:,:,:,:,:,:,nt/10+1) = f_temp;
         F(:,:,:,:,:,:,nt/10+1) = F_temp;
     end
+    
+    toc;
 end
 
 %% statistics
@@ -228,6 +251,9 @@ end
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
 rmpath('..');
+if use_mex
+    addpath('mex');
+end
 
 end
 
@@ -244,7 +270,6 @@ Fold = gpuArray(Fold);
 temp1 = zeros(size(Fold));
 temp2 = zeros(size(Fold));
 temp3 = zeros(size(Fold));
-tic;
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
@@ -260,7 +285,6 @@ for ix = 1:2*Bx
         end
     end
 end
-toc;
 
 dF1 = gpuArray.zeros(size(Fold));
 for l = 0:lmax
@@ -273,32 +297,32 @@ end
 
 clear temp1 temp2 temp3
 
-% gyro random walk
-for l = 0:lmax
-    indmn = -l+lmax+1:l+lmax+1;
-    for i = 1:3
-        for j = 1:3
-            dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:) + ...
-                G1(i,j)*pagefun(@mtimes,pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),...
-                u(indmn,indmn,l+1,i).'),u(indmn,indmn,l+1,j).');
-        end
-    end
-end
-
-% bias randomwalk
-for i = 1:3
-    for j = 1:3
-        if i==j
-            c = pi^2*[0:Bx-1,-Bx:-1].^2;
-            c = -shiftdim(c,-(i+1));
-        else
-            c = pi*[0:Bx-1,0,-Bx+1:-1];
-            c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
-        end
-        
-        dF1 = dF1 + G2(i,j)*Fold.*c;
-    end
-end
+% % gyro random walk
+% for l = 0:lmax
+%     indmn = -l+lmax+1:l+lmax+1;
+%     for i = 1:3
+%         for j = 1:3
+%             dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:) + ...
+%                 G1(i,j)*pagefun(@mtimes,pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),...
+%                 u(indmn,indmn,l+1,i).'),u(indmn,indmn,l+1,j).');
+%         end
+%     end
+% end
+% 
+% % bias randomwalk
+% for i = 1:3
+%     for j = 1:3
+%         if i==j
+%             c = pi^2*[0:Bx-1,-Bx:-1].^2;
+%             c = -shiftdim(c,-(i+1));
+%         else
+%             c = pi*[0:Bx-1,0,-Bx+1:-1];
+%             c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
+%         end
+%         
+%         dF1 = dF1 + G2(i,j)*Fold.*c;
+%     end
+% end
 
 Fnew = gather(Fold+dF1*dt);
 
