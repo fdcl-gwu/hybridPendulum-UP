@@ -10,54 +10,83 @@
 
 void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
-    /* set up arrays */
+    ///////////////////
+    // set up arrays //
+    ///////////////////
+
+    // get Fold from matlab
     cuDoubleComplex* Fold = (cuDoubleComplex*) mxGetComplexDoubles(prhs[0]);
-    size_t dims_F[6] = {2*lmax+1, 2*lmax+1, lmax+1, 2*B, 2*B, 2*B};
-    plhs[0] = mxCreateUninitNumericArray(6, dims_F, mxDOUBLE_CLASS, mxCOMPLEX);
-    cuDoubleComplex* Fnew = (cuDoubleComplex*) mxGetComplexDoubles(plhs[0]);
+    const mwSize* size_Fold = mxGetDimensions(prhs[0]);
+
+    Size_F size_F;
+    init_Size_F(&size_F, (int)size_Fold[2], (int)size_Fold[3]/2);
 
     cuDoubleComplex* Fold_dev;
+    cudaErrorHandle(cudaMalloc(&Fold_dev, size_F.nTot*sizeof(cuDoubleComplex)));
+    cudaErrorHandle(cudaMemcpy(Fold_dev, Fold, size_F.nTot*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+    Size_F* size_F_dev;
+    cudaErrorHandle(cudaMalloc(&size_F_dev, sizeof(size_F)));
+    cudaErrorHandle(cudaMemcpy(size_F_dev, &size_F, sizeof(size_F), cudaMemcpyHostToDevice));
+
+    // set up output Fnew
+    plhs[0] = mxCreateUninitNumericArray(6, (size_t*) size_Fold, mxDOUBLE_CLASS, mxCOMPLEX);
+    cuDoubleComplex* Fnew = (cuDoubleComplex*) mxGetComplexDoubles(plhs[0]);
+
     cuDoubleComplex* Fnew_dev;
-    cudaErrorHandle(cudaMalloc(&Fold_dev, nTot*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMalloc(&Fnew_dev, nTot*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMemcpy(Fold_dev, Fold, nTot*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-
+    cudaErrorHandle(cudaMalloc(&Fnew_dev, size_F.nTot*sizeof(cuDoubleComplex)));
+    
+    // get X from matlab
     cuDoubleComplex* X = (cuDoubleComplex*) mxGetComplexDoubles(prhs[1]);
-    cuDoubleComplex* X_dev;
-    cuDoubleComplex* X_ijk_dev;
-    cudaErrorHandle(cudaMalloc(&X_dev, 3*nx*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMalloc(&X_ijk_dev, 3*nx*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMemcpy(X_dev, X, 3*nx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
+    cuDoubleComplex* X_dev;
+    cudaErrorHandle(cudaMalloc(&X_dev, 3*size_F.nx*sizeof(cuDoubleComplex)));
+    cudaErrorHandle(cudaMemcpy(X_dev, X, 3*size_F.nx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+    // get dt from matlab
     double* dt = mxGetDoubles(prhs[2]);
 
+    // get u from matlab
     cuDoubleComplex* u = (cuDoubleComplex*) mxGetComplexDoubles(prhs[3]);
+
     cuDoubleComplex* u_dev;
-    cudaErrorHandle(cudaMalloc(&u_dev, 3*nR*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMemcpy(u_dev, u, 3*nR*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+    cudaErrorHandle(cudaMalloc(&u_dev, 3*size_F.nR*sizeof(cuDoubleComplex)));
+    cudaErrorHandle(cudaMemcpy(u_dev, u, 3*size_F.nR*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
+    // set up temporary variables for calculation
     cuDoubleComplex* temp_dev;
-    cudaErrorHandle(cudaMalloc(&temp_dev, 3*nR*sizeof(cuDoubleComplex)));
+    cudaErrorHandle(cudaMalloc(&temp_dev, 3*size_F.nR*sizeof(cuDoubleComplex)));
 
-    /* set up block and grid sizes */
+    cuDoubleComplex* X_ijk_dev;
+    cudaErrorHandle(cudaMalloc(&X_ijk_dev, 3*size_F.nx*sizeof(cuDoubleComplex)));
+
+    /////////////////////////////////
+    // set up block and grid sizes //
+    /////////////////////////////////
+
+    // flip the circshift X
     dim3 blocksize_X(8, 8, 8);
-    int gridnum_X = ceil((double) const_2B/8);
+    int gridnum_X = ceil((double) size_F.const_2Bx/8);
     dim3 gridsize_X(gridnum_X, gridnum_X, gridnum_X);
 
-    dim3 blocksize_u(2*lmax+1, 2*lmax+1, 1);
-    dim3 gridsize_u(lmax+1, 1, 1);
+    // multiply u
+    dim3 blocksize_u(size_F.const_2lp1, size_F.const_2lp1, 1);
+    dim3 gridsize_u(size_F.const_lp1, 1, 1);
 
+    // add dF
     dim3 blocksize_add(512,1,1);
-    dim3 gridsize_add(ceil((double) nTot/512),1,1);
+    dim3 gridsize_add(ceil((double) size_F.nTot/512),1,1);
 
-    /* set up tensors */
+    ////////////////////
+    // set up tensors //
+    ////////////////////
     int mode_Fold[6] = {'m','n','l','i','j','k'};
     int mode_X[4] = {'i','j','k','p'};
     int mode_temp[4] = {'m','n','l','p'};
 
-    int64_t extent_Fold[6] = {2*lmax+1, 2*lmax+1, lmax+1, 2*B, 2*B, 2*B};
-    int64_t extent_X[4] = {2*B, 2*B, 2*B, 3};
-    int64_t extent_temp[4] = {2*lmax+1, 2*lmax+1, lmax+1, 3};
+    int64_t extent_Fold[6] = {size_F.const_2lp1, size_F.const_2lp1, size_F.const_lp1, size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx};
+    int64_t extent_X[4] = {size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx, 3};
+    int64_t extent_temp[4] = {size_F.const_2lp1, size_F.const_2lp1, size_F.const_lp1, 3};
 
     cutensorHandle_t handle;
     cutensorInit(&handle);
@@ -104,14 +133,18 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cutensorContractionPlan_t plan;
     cutensorErrorHandle(cutensorInitContractionPlan(&handle, &plan, &desc, &find, worksize));
 
-    cuDoubleComplex alpha = make_cuDoubleComplex((double)1/nx,0);
+    cuDoubleComplex alpha = make_cuDoubleComplex((double)1/size_F.nx,0);
     cuDoubleComplex beta = make_cuDoubleComplex(0,0);
 
-    /* calculate */
-    for (int i = 0; i < const_2B; i++) {
-        for (int j = 0; j < const_2B; j++) {
-            for (int k = 0; k < const_2B; k++) {
-                flip_shift <<<gridsize_X, blocksize_X>>> (X_dev, X_ijk_dev, i, j, k);
+    ///////////////
+    // calculate //
+    ///////////////
+
+    for (int i = 0; i < size_F.const_2Bx; i++) {
+        for (int j = 0; j < size_F.const_2Bx; j++) {
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+
+                flip_shift <<<gridsize_X, blocksize_X>>> (X_dev, X_ijk_dev, i, j, k, size_F_dev);
                 cudaErrorHandle(cudaGetLastError());
 
                 cutensorErrorHandle(cutensorContraction(&handle, &plan, (void*)&alpha, Fold_dev, X_ijk_dev,
@@ -119,16 +152,18 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
                 cudaDeviceSynchronize();
 
-                derivate <<<gridsize_u, blocksize_u>>> (temp_dev, u_dev, Fnew_dev, i, j, k);
+                derivate <<<gridsize_u, blocksize_u>>> (temp_dev, u_dev, Fnew_dev, i, j, k, size_F_dev);
+                cudaErrorHandle(cudaGetLastError());
 
                 cudaDeviceSynchronize();
             }
         }
     }
 
-    add_dF <<<gridsize_add, blocksize_add>>> (Fnew_dev, Fold_dev, dt[0]);
+    add_dF <<<gridsize_add, blocksize_add>>> (Fnew_dev, Fold_dev, dt[0], size_F_dev);
+    cudaErrorHandle(cudaGetLastError());
 
-    cudaMemcpy(Fnew, Fnew_dev, nTot*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    cudaErrorHandle(cudaMemcpy(Fnew, Fnew_dev, size_F.nTot*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
 
     cudaFree(Fold_dev);
     cudaFree(Fnew_dev);

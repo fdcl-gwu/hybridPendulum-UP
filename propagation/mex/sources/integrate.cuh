@@ -4,19 +4,27 @@
 #include <cuComplex.h>
 #include <cutensor.h>
 
-constexpr int B = 10;
-constexpr int lmax = B-1;
+struct Size_F {
+	int BR;
+	int Bx;
+	int lmax;
 
-constexpr int nR = (2*lmax+1) * (2*lmax+1) * (lmax+1);
-constexpr int nx = (2*B) * (2*B) * (2*B);
-constexpr int nTot = nR * nx;
+	int nR;
+	int nx;
+	int nTot;
 
-constexpr int const_2B = 2*B;
-constexpr int const_4Bs = (2*B) * (2*B);
+	int const_2Bx;
+	int const_2Bxs;
+	int const_2lp1;
+	int const_lp1;
+	int const_2lp1s;
+};
 
-__global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, int js, int ks);
-__global__ void derivate(cuDoubleComplex* temp, cuDoubleComplex* u, cuDoubleComplex* Fnew, int i, int j, int k);
-__global__ void add_dF(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt);
+__global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, int js, int ks, Size_F* size_F);
+__global__ void derivate(cuDoubleComplex* temp, cuDoubleComplex* u, cuDoubleComplex* Fnew, int i, int j, int k, Size_F* size_F);
+__global__ void add_dF(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt, Size_F* size_F);
 
 __host__ void cudaErrorHandle(const cudaError_t& err);
 __host__ void cutensorErrorHandle(const cutensorStatus_t& err);
+
+__host__ void init_Size_F(Size_F* size_F, int BR, int Bx);

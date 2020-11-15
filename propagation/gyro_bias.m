@@ -24,7 +24,7 @@ Nt = T*sf+1;
 
 % band limit
 BR = 10;
-Bx = 10;
+Bx = 15;
 lmax = BR-1;
 
 % grid over SO(3)
