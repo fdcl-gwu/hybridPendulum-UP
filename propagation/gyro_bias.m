@@ -114,7 +114,7 @@ R_linInd = reshape(R,3,3,(2*BR)^3);
 f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,(Nt-1)/10+1);
 for k = 1:2*Bx
     for j = 1:2*Bx
-        parfor i = 1:2*Bx
+        for i = 1:2*Bx
             f(:,:,:,i,j,k,1) = reshape(func(R_linInd,x(:,i,j,k)),2*BR,2*BR,2*BR);
         end
     end

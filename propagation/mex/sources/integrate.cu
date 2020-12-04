@@ -36,34 +36,80 @@ __global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, i
 	}
 }
 
-__global__ void derivate(cuDoubleComplex* temp, cuDoubleComplex* u, cuDoubleComplex* Fnew, int i, int j, int k, Size_F* size_F)
+__global__ void addup_F(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt, Size_F* size_F)
 {
-	int l = blockIdx.x;
-	int m_p_lmax = threadIdx.x;
-	int n_p_lmax = threadIdx.y;
+	int ind1 = threadIdx.x + blockIdx.x*blockDim.x;
+	if (ind1 < size_F[0].nR_compact) {
+		ind1 += blockIdx.y*size_F[0].nR_compact;
 
-	long ind_Fnew = m_p_lmax + n_p_lmax*size_F[0].const_2lp1 + l*size_F[0].const_2lp1s
-		+ (i + j*size_F[0].const_2Bx + k*size_F[0].const_2Bxs)*size_F[0].nR;
+		int ind2 = ind1 + size_F[0].nTot_compact;
+		int ind3 = ind2 + size_F[0].nTot_compact;
 
-	if (m_p_lmax-size_F[0].lmax >= -l && m_p_lmax-size_F[0].lmax <= l && n_p_lmax-size_F[0].lmax >= -l && n_p_lmax-size_F[0].lmax <= l) {
-		for (int ii = -l+size_F[0].lmax; ii <= l+size_F[0].lmax; ii++) {
-			for (int p = 0; p < 3; p++) {
-				int ind_temp = m_p_lmax + ii*size_F[0].const_2lp1 + l*size_F[0].const_2lp1s + p*size_F[0].nR;
-				int ind_u = n_p_lmax + ii*size_F[0].const_2lp1 + l*size_F[0].const_2lp1s + p*size_F[0].nR;
+		Fnew[ind1] = cuCadd(Fnew[ind1], Fnew[ind2]);
+		Fnew[ind1] = cuCadd(Fnew[ind1], Fnew[ind3]);
 
-				Fnew[ind_Fnew] = cuCsub(Fnew[ind_Fnew], cuCmul(temp[ind_temp], u[ind_u]));
+		Fnew[ind1].x = Fold[ind1].x + dt*Fnew[ind1].x;
+		Fnew[ind1].y = Fold[ind1].y + dt*Fnew[ind1].y;
+	}
+}
+
+__host__ void modify_F(cuDoubleComplex* F, cuDoubleComplex* F_modify, bool reduce,Size_F* size_F)
+{
+	if (reduce) {
+		int ind_F_reduced = 0;
+		for (int k = 0; k < size_F[0].const_2Bx; k++) {
+			for (int j = 0; j < size_F[0].const_2Bx; j++) {
+				for (int i = 0; i < size_F[0].const_2Bx; i++) {
+					for (int l = 0; l <= size_F[0].lmax; l++) {
+						for (int m = -l; m <= l; m++) {
+							for (int n = -l; n <= l; n++) {
+								int ind_F = n+size_F[0].lmax + (m+size_F[0].lmax)*size_F[0].l_cum0 + 
+									l*size_F[0].l_cum1 + i*size_F[0].l_cum2 + j*size_F[0].l_cum3 + k*size_F[0].l_cum4;
+								F_modify[ind_F_reduced] = F[ind_F];
+
+								ind_F_reduced++;
+							}
+						}
+					}
+				}
+			}
+		}
+	} else {
+		int ind_F_reduced = 0;
+		for (int k = 0; k < size_F[0].const_2Bx; k++) {
+			for (int j = 0; j < size_F[0].const_2Bx; j++) {
+				for (int i = 0; i < size_F[0].const_2Bx; i++) {
+					for (int l = 0; l <= size_F[0].lmax; l++) {
+						for (int m = -l; m <= l; m++) {
+							for (int n = -l; n <= l; n++) {
+								int ind_F = n+size_F[0].lmax + (m+size_F[0].lmax)*size_F[0].l_cum0 + 
+									l*size_F[0].l_cum1 + i*size_F[0].l_cum2 + j*size_F[0].l_cum3 + k*size_F[0].l_cum4;
+								F_modify[ind_F] = F[ind_F_reduced];
+
+								ind_F_reduced++;
+							}
+						}
+					}
+				}
 			}
 		}
 	}
 }
 
-__global__ void add_dF(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt, Size_F* size_F)
+__host__ void modify_u(cuDoubleComplex* u, cuDoubleComplex* u_modify, Size_F* size_F)
 {
-	long i = blockIdx.x*blockDim.x + threadIdx.x;
+	int ind_u_reduced = 0;
+	for (int i = 0; i < 3; i++) {
+		for (int l = 0; l <= size_F[0].lmax; l++) {
+			for (int m = -l; m <= l; m++) {
+				for (int n = -l; n <= l; n++) {
+					int ind_u = n+size_F[0].lmax + (m+size_F[0].lmax)*size_F[0].l_cum0 + l*size_F[0].l_cum1 + i*size_F[0].l_cum2;
+					u_modify[ind_u_reduced] = u[ind_u];
 
-	if (i < size_F[0].nTot) {
-		Fnew[i].x = Fold[i].x + dt*Fnew[i].x;
-		Fnew[i].y = Fold[i].y + dt*Fnew[i].y;
+					ind_u_reduced++;
+				}
+			}
+		}
 	}
 }
 
@@ -81,6 +127,13 @@ __host__ void cutensorErrorHandle(const cutensorStatus_t& err)
 	}
 }
 
+__host__ void cublasErrorHandle(const cublasStatus_t& err)
+{
+	if (err != CUBLAS_STATUS_SUCCESS) {
+		std::cout << "cuBlas Error: " << err << std::endl;
+	}
+}
+
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx)
 {
 	size_F->BR = BR;
@@ -91,10 +144,19 @@ __host__ void init_Size_F(Size_F* size_F, int BR, int Bx)
 	size_F->nx = (2*Bx) * (2*Bx) * (2*Bx);
 	size_F->nTot = size_F->nR * size_F->nx;
 
+	size_F->nR_compact = (size_F->lmax+1) * (2*size_F->lmax+1) * (2*size_F->lmax+3) / 3;
+	size_F->nTot_compact = size_F->nR_compact * size_F->nx;
+
 	size_F->const_2Bx = 2*Bx;
 	size_F->const_2Bxs = (2*Bx) * (2*Bx);
 	size_F->const_2lp1 = 2*size_F->lmax+1;
 	size_F->const_lp1 = size_F->lmax+1;
 	size_F->const_2lp1s = (2*size_F->lmax+1) * (2*size_F->lmax+1);
+
+	size_F->l_cum0 = size_F->const_2lp1;
+	size_F->l_cum1 = size_F->l_cum0*size_F->const_2lp1;
+	size_F->l_cum2 = size_F->l_cum1*size_F->const_lp1;
+	size_F->l_cum3 = size_F->l_cum2*size_F->const_2Bx;
+	size_F->l_cum4 = size_F->l_cum3*size_F->const_2Bx;
 }
 
