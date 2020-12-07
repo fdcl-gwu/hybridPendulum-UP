@@ -154,7 +154,7 @@ for nt = 1:Nt-1
     
     % propagating Fourier coefficients
     if use_mex
-        F_temp = propagate_mex(F_temp,X,1/sf,u);
+        F_temp = propagate_mex(F_temp,X,1/sf,u,G1,G2);
     else
         F_temp = integrate(F_temp,X,1/sf,u,G1,G2);
     end
@@ -297,32 +297,32 @@ end
 
 clear temp1 temp2 temp3
 
-% % gyro random walk
-% for l = 0:lmax
-%     indmn = -l+lmax+1:l+lmax+1;
-%     for i = 1:3
-%         for j = 1:3
-%             dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:) + ...
-%                 G1(i,j)*pagefun(@mtimes,pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),...
-%                 u(indmn,indmn,l+1,i).'),u(indmn,indmn,l+1,j).');
-%         end
-%     end
-% end
-% 
-% % bias randomwalk
-% for i = 1:3
-%     for j = 1:3
-%         if i==j
-%             c = pi^2*[0:Bx-1,-Bx:-1].^2;
-%             c = -shiftdim(c,-(i+1));
-%         else
-%             c = pi*[0:Bx-1,0,-Bx+1:-1];
-%             c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
-%         end
-%         
-%         dF1 = dF1 + G2(i,j)*Fold.*c;
-%     end
-% end
+% gyro random walk
+for l = 0:lmax
+    indmn = -l+lmax+1:l+lmax+1;
+    for i = 1:3
+        for j = 1:3
+            dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:) + ...
+                G1(i,j)*pagefun(@mtimes,pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),...
+                u(indmn,indmn,l+1,i).'),u(indmn,indmn,l+1,j).');
+        end
+    end
+end
+
+% bias randomwalk
+for i = 1:3
+    for j = 1:3
+        if i==j
+            c = pi^2*[0:Bx-1,-Bx:-1].^2;
+            c = -shiftdim(c,-(i+1));
+        else
+            c = pi*[0:Bx-1,0,-Bx+1:-1];
+            c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
+        end
+        
+        dF1 = dF1 + G2(i,j)*Fold.*c;
+    end
+end
 
 Fnew = gather(Fold+dF1*dt);
 

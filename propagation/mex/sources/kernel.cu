@@ -40,9 +40,6 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
     cuDoubleComplex* Fnew_dev;
     cudaErrorHandle(cudaMalloc(&Fnew_dev, 3*size_F.nTot_compact*sizeof(cuDoubleComplex)));
-
-    cuDoubleComplex* Fnew_buffer_dev;
-    cudaErrorHandle(cudaMalloc(&Fnew_buffer_dev, 3*size_F.nTot_compact*sizeof(cuDoubleComplex)));
     
     // get X from matlab
     cuDoubleComplex* X = (cuDoubleComplex*) mxGetComplexDoubles(prhs[1]);
@@ -64,6 +61,16 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaMalloc(&u_dev, 3*size_F.nR_compact*sizeof(cuDoubleComplex)));
     cudaErrorHandle(cudaMemcpy(u_dev, u_compact, 3*size_F.nR_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
+    // get G1 from matlab
+    double* G1 = mxGetDoubles(prhs[4]);
+
+    // get G2 from matlab
+    double* G2 = mxGetDoubles(prhs[5]);
+
+    double* G2_dev;
+    cudaErrorHandle(cudaMalloc(&G2_dev, 9*sizeof(double)));
+    cudaErrorHandle(cudaMemcpy(G2_dev, G2, 9*sizeof(double), cudaMemcpyHostToDevice));
+
     // set up temporary variables for calculation
     cuDoubleComplex* temp_dev;
     cudaErrorHandle(cudaMalloc(&temp_dev, 3*size_F.nR_compact*sizeof(cuDoubleComplex)));
@@ -80,9 +87,13 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     int gridnum_X = ceil((double) size_F.const_2Bx/8);
     dim3 gridsize_X(gridnum_X, gridnum_X, gridnum_X);
 
-    // dddup_F
+    // addup_F
+    dim3 blocksize_addupF(512, 1, 1);
+    dim3 gridsize_addupF(ceil((double) size_F.nR_compact/512), size_F.nx, 1);
+
+    // add
     dim3 blocksize_add(512, 1, 1);
-    dim3 gridsize_add(ceil((double) size_F.nR_compact/512), size_F.nx, 1);
+    dim3 gridsize_add(ceil((double) size_F.nTot_compact/512), 1, 1);
 
     ////////////////////
     // set up tensors //
@@ -204,10 +215,77 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     }
 
     // addup F
-    addup_F <<<gridsize_add, blocksize_add>>> (Fnew_dev, Fold_dev, dt[0], size_F_dev);
+    addup_F <<<gridsize_addupF, blocksize_addupF>>> (Fnew_dev, Fold_dev, dt[0], size_F_dev);
     cudaErrorHandle(cudaGetLastError());
 
     cudaDeviceSynchronize();
+
+    // gyro random walk noise
+    cuDoubleComplex* dF_dev;
+    cudaErrorHandle(cudaMalloc(&dF_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            for (int l = 0; l <= size_F.lmax; l++) {
+                int ind_F = l*(2*l-1)*(2*l+1)/3;
+                long long int stride_F = size_F.nR_compact;
+
+                int ind_u1 = l*(2*l-1)*(2*l+1)/3 + i*size_F.nR_compact;
+                int ind_u2 = l*(2*l-1)*(2*l+1)/3 + j*size_F.nR_compact;
+                long long int stride_u = 0;
+
+                alpha_cublas.x = 1;
+
+                cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, 2*l+1, 2*l+1, 2*l+1,
+                    &alpha_cublas, Fold_dev+ind_F, 2*l+1, stride_F,
+                    u_dev+ind_u1, 2*l+1, stride_u,
+                    &beta, dF_dev+ind_F, 2*l+1, stride_F, size_F.nx));
+
+                cudaDeviceSynchronize();
+
+                alpha_cublas.x = dt[0]*G1[i+j*3];
+
+                cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, 2*l+1, 2*l+1, 2*l+1,
+                    &alpha_cublas, dF_dev+ind_F, 2*l+1, stride_F,
+                    u_dev+ind_u2, 2*l+1, stride_u,
+                    &beta, dF_dev+ind_F, 2*l+1, stride_F, size_F.nx));
+
+                cudaDeviceSynchronize();
+            }
+
+            add <<<gridsize_add, blocksize_add>>> (Fnew_dev, dF_dev, size_F_dev);
+            cudaErrorHandle(cudaGetLastError());
+
+            cudaDeviceSynchronize();
+        }
+    }
+
+    // bias random walk noise
+    double* c_dev;
+    cudaErrorHandle(cudaMalloc(&c_dev, size_F.const_2Bxs*sizeof(double)));
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (i == j) {
+                dim3 blocksize_c(size_F.const_2Bx, 1, 1);
+                get_c <<<1, blocksize_c>>> (c_dev, i, j, G2_dev, dt[0], size_F_dev);
+                cudaErrorHandle(cudaGetLastError());
+            }
+            else {
+                dim3 blocksize_c(size_F.const_2Bx, size_F.const_2Bx, 1);
+                get_c <<<1, blocksize_c>>> (c_dev, i, j, G2_dev, dt[0], size_F_dev);
+                cudaErrorHandle(cudaGetLastError());
+            }
+
+            add_biasRW <<<gridsize_addupF, blocksize_addupF>>> (dF_dev, Fold_dev, c_dev, i, j, size_F_dev);
+            cudaErrorHandle(cudaGetLastError());
+
+            add <<<gridsize_add, blocksize_add>>> (Fnew_dev, dF_dev, size_F_dev);
+            cudaErrorHandle(cudaGetLastError());
+
+            cudaDeviceSynchronize();
+        }
+    }
 
     // gather Fnew
     cudaErrorHandle(cudaMemcpy(Fnew_compact, Fnew_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
@@ -215,10 +293,10 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
     cudaFree(Fold_dev);
     cudaFree(Fnew_dev);
-    cudaFree(Fnew_buffer_dev);
     cudaFree(X_dev);
     cudaFree(X_ijk_dev);
     cudaFree(u_dev);
+    cudaFree(dF_dev);
 
     delete[] Fold_compact;
     delete[] Fnew_compact;

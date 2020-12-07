@@ -5,6 +5,8 @@
 #include <cutensor.h>
 #include <cublas_v2.h>
 
+constexpr double PI = 3.141592653589793;
+
 struct Size_F {
 	int BR;
 	int Bx;
@@ -31,6 +33,9 @@ struct Size_F {
 
 __global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, int js, int ks, Size_F* size_F);
 __global__ void addup_F(cuDoubleComplex* F, cuDoubleComplex* Fold, double dt, Size_F* size_F);
+__global__ void add(cuDoubleComplex*F1, cuDoubleComplex* F2, Size_F* size_F);
+__global__ void get_c(double* c, int i, int j, double* G, double dt, Size_F* size_F);
+__global__ void add_biasRW(cuDoubleComplex* dF, cuDoubleComplex* Fold, double* c, int i, int j, Size_F* size_F);
 
 __host__ void modify_F(cuDoubleComplex* F, cuDoubleComplex* F_modify, bool reduce, Size_F* size_F);
 __host__ void modify_u(cuDoubleComplex* u, cuDoubleComplex* u_modify, Size_F* size_F);
