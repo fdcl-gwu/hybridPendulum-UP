@@ -245,7 +245,7 @@ for nt = 1:(Nt-1)/10+1
     MFG.P(:,:,nt) = covxvR*covvRvR^-1;
     MFG.Miu(:,nt) = stat.Ex(:,nt)-MFG.P(:,:,nt)*stat.EvR(:,nt);
     MFG.Sigma(:,:,nt) = covxx-MFG.P(:,:,nt)*covxvR.'+...
-        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt)*eye(3))-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
+        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt))*eye(3)-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
 end
 
 rmpath('../rotation3d');

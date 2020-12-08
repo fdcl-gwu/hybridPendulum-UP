@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <iostream>
 
-__global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, int js, int ks, Size_F* size_F)
+__global__ void flip_shift(const cuDoubleComplex* X, cuDoubleComplex* X_ijk, const int is, const int js, const int ks, const Size_F* size_F)
 {
 	int i = blockIdx.x*blockDim.x + threadIdx.x;
 	int j = blockIdx.y*blockDim.y + threadIdx.y;
@@ -36,7 +36,7 @@ __global__ void flip_shift(cuDoubleComplex* X, cuDoubleComplex* X_ijk, int is, i
 	}
 }
 
-__global__ void addup_F(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt, Size_F* size_F)
+__global__ void addup_F(cuDoubleComplex* dF, Size_F* size_F)
 {
 	int ind1 = threadIdx.x + blockIdx.x*blockDim.x;
 	if (ind1 < size_F[0].nR_compact) {
@@ -45,29 +45,26 @@ __global__ void addup_F(cuDoubleComplex* Fnew, cuDoubleComplex* Fold, double dt,
 		int ind2 = ind1 + size_F[0].nTot_compact;
 		int ind3 = ind2 + size_F[0].nTot_compact;
 
-		Fnew[ind1] = cuCadd(Fnew[ind1], Fnew[ind2]);
-		Fnew[ind1] = cuCadd(Fnew[ind1], Fnew[ind3]);
-
-		Fnew[ind1].x = Fold[ind1].x + dt*Fnew[ind1].x;
-		Fnew[ind1].y = Fold[ind1].y + dt*Fnew[ind1].y;
+		dF[ind1] = cuCadd(dF[ind1], dF[ind2]);
+		dF[ind1] = cuCadd(dF[ind1], dF[ind3]);
 	}
 }
 
-__global__ void add(cuDoubleComplex*F1, cuDoubleComplex* F2, Size_F* size_F)
+__global__ void add_F(cuDoubleComplex*dF, const cuDoubleComplex* dF_temp, const Size_F* size_F)
 {
 	int ind = threadIdx.x + blockIdx.x*blockDim.x;
 	if (ind < size_F[0].nTot_compact)
-		F1[ind] = cuCadd(F1[ind], F2[ind]);
+		dF[ind] = cuCadd(dF[ind], dF_temp[ind]);
 }
 
-__global__ void get_c(double* c, int i, int j, double* G, double dt, Size_F* size_F)
+__global__ void get_c(double* c, const int i, const int j, const double* G, const Size_F* size_F)
 {
 	if (i == j) {
 		int ix = threadIdx.x;
 		if (ix < size_F[0].Bx)
-			c[ix] = -PI*PI * ix*ix * G[i+3*j] * dt;
+			c[ix] = -PI*PI * ix*ix * G[i+3*j];
 		else
-			c[ix] = -PI*PI * (ix-size_F[0].const_2Bx)*(ix-size_F[0].const_2Bx) * G[i+3*j] * dt;
+			c[ix] = -PI*PI * (ix-size_F[0].const_2Bx)*(ix-size_F[0].const_2Bx) * G[i+3*j];
 	} else {
 		int ix = threadIdx.x;
 		int jx = threadIdx.y;
@@ -89,11 +86,11 @@ __global__ void get_c(double* c, int i, int j, double* G, double dt, Size_F* siz
 			c2 = PI * (jx-size_F[0].const_2Bx);
 
 		int indc = ix + jx*size_F[0].const_2Bx;
-		c[indc] = -c1*c2*G[i+3*j]*dt;
+		c[indc] = -c1*c2 * G[i+3*j];
 	}
 }
 
-__global__ void add_biasRW(cuDoubleComplex* dF, cuDoubleComplex* Fold, double* c, int i, int j, Size_F* size_F)
+__global__ void get_biasRW(cuDoubleComplex* dF_temp, const cuDoubleComplex* Fold, const double* c, const int i, const int j,const  Size_F* size_F)
 {
 	int indR = threadIdx.x + blockIdx.x*blockDim.x;
 	if (indR < size_F[0].nR_compact) {
@@ -108,13 +105,23 @@ __global__ void add_biasRW(cuDoubleComplex* dF, cuDoubleComplex* Fold, double* c
 		int ind = indR + indx*size_F[0].nR_compact;
 
 		if (i==j) {
-			dF[ind].x = Fold[ind].x * c[ijk[i]];
-			dF[ind].y = Fold[ind].y * c[ijk[i]];
+			dF_temp[ind].x = Fold[ind].x * c[ijk[i]];
+			dF_temp[ind].y = Fold[ind].y * c[ijk[i]];
 		} else {
 			int indc = ijk[i] + ijk[j]*size_F[0].const_2Bx;
-			dF[ind].x = Fold[ind].x * c[indc];
-			dF[ind].y = Fold[ind].y * c[indc];
+			dF_temp[ind].x = Fold[ind].x * c[indc];
+			dF_temp[ind].y = Fold[ind].y * c[indc];
 		}
+	}
+}
+
+__global__ void integrate_Fnew(cuDoubleComplex* Fnew, const cuDoubleComplex* Fold, const cuDoubleComplex* dF, const double dt, const Size_F* size_F)
+{
+	int ind = threadIdx.x + blockIdx.x*blockDim.x;
+	if (ind < size_F[0].nTot_compact)
+	{
+		Fnew[ind].x = Fold[ind].x + dt*dF[ind].x;
+		Fnew[ind].y = Fold[ind].y + dt*dF[ind].y;
 	}
 }
 
