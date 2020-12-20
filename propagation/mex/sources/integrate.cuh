@@ -29,20 +29,31 @@ struct Size_F {
 	int l_cum2;
 	int l_cum3;
 	int l_cum4;
+
+	// split settings
+	int ns;
+	int nR_split;
+	int nR_remainder;
+
+	int nTot_splitx;
 };
 
 __global__ void flip_shift(const cuDoubleComplex* X, cuDoubleComplex* X_ijk, const int is, const int js, const int ks, const Size_F* size_F);
 __global__ void addup_F(cuDoubleComplex* dF, Size_F* size_F);
 __global__ void add_F(cuDoubleComplex* dF, const cuDoubleComplex* F, const Size_F* size_F);
 __global__ void get_c(double* c, const int i, const int j, const double* G, const Size_F* size_F);
-__global__ void get_biasRW(cuDoubleComplex* dF_temp, const cuDoubleComplex* Fold, const double* c, const int i, const int j, const Size_F* size_F);
+__global__ void get_biasRW(cuDoubleComplex* dF_temp, const cuDoubleComplex* Fold, const double* c, const int i, const int j, const int ijk_k, const Size_F* size_F);
 __global__ void integrate_Fnew(cuDoubleComplex* Fnew, const cuDoubleComplex* Fold, const cuDoubleComplex* dF, const double dt, const Size_F* size_F);
 
-__host__ void modify_F(cuDoubleComplex* F, cuDoubleComplex* F_modify, bool reduce, Size_F* size_F);
+__host__ void modify_F(const cuDoubleComplex* F, cuDoubleComplex* F_modify, bool reduce, Size_F* size_F);
+__host__ void permute_F(cuDoubleComplex* F, bool R_first, Size_F* size_F);
 __host__ void modify_u(cuDoubleComplex* u, cuDoubleComplex* u_modify, Size_F* size_F);
 
 __host__ void cudaErrorHandle(const cudaError_t& err);
 __host__ void cutensorErrorHandle(const cutensorStatus_t& err);
 __host__ void cublasErrorHandle(const cublasStatus_t& err);
+
+__host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const Size_F* size_F);
 
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx);
