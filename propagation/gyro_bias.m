@@ -154,7 +154,7 @@ for nt = 1:Nt-1
     
     % propagating Fourier coefficients
     if use_mex
-        F_temp = propagate_mex(F_temp,X,1/sf,u,G1,G2);
+        F_temp = gyrobias_propagate(F_temp,X,1/sf,u,G1,G2);
     else
         F_temp = integrate(F_temp,X,1/sf,u,G1,G2);
     end
