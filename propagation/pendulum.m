@@ -22,13 +22,14 @@ m = 10;
 g = 3;
 
 % band limit
-B = 10;
-lmax = B-1;
+BR = 10;
+Bx = 10;
+lmax = BR-1;
 
 % grid over SO(3)
-alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
-beta = reshape(pi/(4*B)*(2*(0:(2*B-1))+1),1,1,[]);
-gamma = reshape(pi/B*(0:(2*B-1)),1,1,[]);
+alpha = reshape(pi/BR*(0:(2*BR-1)),1,1,[]);
+beta = reshape(pi/(4*BR)*(2*(0:(2*BR-1))+1),1,1,[]);
+gamma = reshape(pi/BR*(0:(2*BR-1)),1,1,[]);
 
 ca = cos(alpha);
 sa = sin(alpha);
@@ -37,14 +38,14 @@ sb = sin(beta);
 cg = cos(gamma);
 sg = sin(gamma);
 
-Ra = [ca,-sa,zeros(1,1,2*B);sa,ca,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
-Rb = [cb,zeros(1,1,2*B),sb;zeros(1,1,2*B),ones(1,1,2*B),zeros(1,1,2*B);-sb,zeros(1,1,2*B),cb];
-Rg = [cg,-sg,zeros(1,1,2*B);sg,cg,zeros(1,1,2*B);zeros(1,1,2*B),zeros(1,1,2*B),ones(1,1,2*B)];
+Ra = [ca,-sa,zeros(1,1,2*BR);sa,ca,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*BR),ones(1,1,2*BR)];
+Rb = [cb,zeros(1,1,2*BR),sb;zeros(1,1,2*BR),ones(1,1,2*BR),zeros(1,1,2*BR);-sb,zeros(1,1,2*BR),cb];
+Rg = [cg,-sg,zeros(1,1,2*BR);sg,cg,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*BR),ones(1,1,2*BR)];
 
-R = zeros(3,3,2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        for k = 1:2*B
+R = zeros(3,3,2*BR,2*BR,2*BR);
+for i = 1:2*BR
+    for j = 1:2*BR
+        for k = 1:2*BR
             R(:,:,i,j,k) = Ra(:,:,i)*Rb(:,:,j)*Rg(:,:,k);
         end
     end
@@ -52,24 +53,24 @@ end
 
 % grid over R^3
 L = 10;
-x = zeros(3,2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        for k = 1:2*B
-            x(:,i,j,k) = [-L/2+L/(2*B)*(i-1);-L/2+L/(2*B)*(j-1);-L/2+L/(2*B)*(k-1)];
+x = zeros(3,2*Bx,2*Bx,2*Bx);
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            x(:,i,j,k) = [-L/2+L/(2*Bx)*(i-1);-L/2+L/(2*Bx)*(j-1);-L/2+L/(2*Bx)*(k-1)];
         end
     end
 end
 
 % weights
-w = zeros(1,2*B);
-for j = 1:2*B
-    w(j) = 1/(4*B^3)*sin(beta(j))*sum(1./(2*(0:B-1)+1).*sin((2*(0:B-1)+1)*beta(j)));
+w = zeros(1,2*BR);
+for j = 1:2*BR
+    w(j) = 1/(4*BR^3)*sin(beta(j))*sum(1./(2*(0:BR-1)+1).*sin((2*(0:BR-1)+1)*beta(j)));
 end
 
 % Wigner_d
-d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B);
-for j = 1:2*B
+d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*BR);
+for j = 1:2*BR
     d(:,:,:,j) = Wigner_d(beta(j),lmax);
 end
 
@@ -79,7 +80,7 @@ u = getu(lmax,isreal);
 % CG coefficient
 warning('off','MATLAB:nearlySingularMatrix');
 
-CG = cell(B,B);
+CG = cell(BR,BR);
 for l1 = 0:lmax
     for l2 = 0:lmax
         CG{l1+1,l2+1} = clebsch_gordan(l1,l2);
@@ -89,7 +90,7 @@ end
 warning('on','MATLAB:nearlySingularMatrix');
 
 % Fourier transform of x
-X = gpuArray.zeros(2*B,2*B,2*B,3);
+X = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3);
 for i = 1:3
     X(:,:,:,i) = fftn(x(i,:,:,:));
 end
@@ -99,7 +100,7 @@ ojo = -cross(x,permute(pagefun(@mtimes,J,permute(gpuArray(x),...
     [1,5,2,3,4])),[1,3,4,5,2]));
 ojo = permute(pagefun(@mtimes,J^-1,permute(ojo,[1,5,2,3,4])),[1,3,4,5,2]);
 
-OJO = gpuArray.zeros(2*B,2*B,2*B,3);
+OJO = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3);
 for i = 1:3
     OJO(:,:,:,i) = fftn(ojo(i,:,:,:));
 end
@@ -107,13 +108,13 @@ end
 clear ojo;
 
 % Fourier transform of M(R)
-mR = -m*g*cross(repmat(rho,1,2*B,2*B,2*B),permute(R(3,:,:,:,:),[2,3,4,5,1]));
+mR = -m*g*cross(repmat(rho,1,2*BR,2*BR,2*BR),permute(R(3,:,:,:,:),[2,3,4,5,1]));
 mR = permute(pagefun(@mtimes,J^-1,permute(gpuArray(mR),[1,5,2,3,4])),[1,3,4,5,2]);
 
 MR = gpuArray.zeros(2*lmax+1,2*lmax+1,lmax+1,3);
 for i = 1:3
-    F1 = gpuArray.zeros(2*B,2*B,2*B);
-    for k = 1:2*B
+    F1 = gpuArray.zeros(2*BR,2*BR,2*BR);
+    for k = 1:2*BR
         F1(:,k,:) = fftn(mR(i,:,k,:));
     end
     F1 = fftshift(fftshift(F1,1),3);
@@ -138,7 +139,7 @@ Sigma = 1^2*eye(3);
 
 c = pdf_MF_normal(diag(S));
 
-f = zeros(2*B,2*B,2*B,2*B,2*B,2*B,(Nt-1)/(sf/10)+1);
+f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,(Nt-1)/(sf/10)+1);
 f(:,:,:,:,:,:,1) = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     permute(exp(sum(-0.5*permute((x-Miu),[1,5,2,3,4]).*permute((x-Miu),...
     [5,1,2,3,4]).*Sigma^-1,[1,2])),[1,2,6,3,4,5])/c/sqrt((2*pi)^3*det(Sigma));
@@ -163,13 +164,13 @@ EvRvR = zeros(3,3,Nt);
 
 %% propagation
 f_temp = f(:,:,:,:,:,:,1);
-F_temp = zeros(2*lmax+1,2*lmax+1,lmax+1,2*B,2*B,2*B);
+F_temp = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for nt = 1:Nt-1
     tic;
     
     % forward
-    F1 = zeros(2*B,2*B,2*B,2*B,2*B,2*B);
-    for k = 1:2*B
+    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+    for k = 1:2*BR
         F1(:,k,:,:,:,:) = fftn(f_temp(:,k,:,:,:,:));
     end
     F1 = fftshift(fftshift(F1,1),3);
@@ -188,13 +189,13 @@ for nt = 1:Nt-1
     F_temp = integrate(F_temp,X,OJO,MR,1/sf,L,u,CG);
     
     % backward
-    F1 = zeros(2*B-1,2*B,2*B-1,2*B,2*B,2*B);
+    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
             F_mn = F_temp(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
 
-            for k = 1:2*B
+            for k = 1:2*BR
                 d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
                 F1(m+lmax+1,k,n+lmax+1,:,:,:) = sum((2*permute(lmin:lmax,...
                     [1,3,2])+1).*F_mn.*d_jk_betak,3);
@@ -202,12 +203,12 @@ for nt = 1:Nt-1
         end
     end
 
-    F1 = cat(1,F1,zeros(1,2*B,2*B-1,2*B,2*B,2*B));
-    F1 = cat(3,F1,zeros(2*B,2*B,1,2*B,2*B,2*B));
+    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
+    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
     F1 = ifftshift(ifftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
-    for k = 1:2*B
-        f_temp(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*B)^2;
+    for k = 1:2*BR
+        f_temp(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
     end
     
     if rem(nt,sf/10)==0
@@ -247,8 +248,9 @@ end
 
 function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG )
 
-B = size(Fold,3);
-lmax = B-1;
+BR = size(Fold,3);
+Bx = size(Fold,4)/2;
+lmax = BR-1;
 
 Fold = gpuArray(Fold);
 u = gpuArray(u);
@@ -259,18 +261,18 @@ dF1 = gpuArray.zeros(size(Fold));
 temp1 = gpuArray.zeros(size(dF1));
 temp2 = gpuArray.zeros(size(dF1));
 temp3 = gpuArray.zeros(size(dF1));
-for ix = 1:2*B
-    for jx = 1:2*B
-        for kx = 1:2*B
+for ix = 1:2*Bx
+    for jx = 1:2*Bx
+        for kx = 1:2*Bx
             X_ijk = flip(flip(flip(X,1),2),3);
             X_ijk = circshift(X_ijk,ix,1);
             X_ijk = circshift(X_ijk,jx,2);
             X_ijk = circshift(X_ijk,kx,3);
             X_ijk = permute(X_ijk,[5,6,7,1,2,3,4]);
             
-            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*B)^3;
-            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*B)^3;
-            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*B)^3;
+            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*Bx)^3;
+            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*Bx)^3;
+            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*Bx)^3;
         end
     end
 end
@@ -286,21 +288,21 @@ end
 clear temp1 temp2 temp3
 
 % cross(Omega,J*Omega)
-for ix = 1:2*B
-    for jx = 1:2*B
-        for kx = 1:2*B
+for ix = 1:2*Bx
+    for jx = 1:2*Bx
+        for kx = 1:2*Bx
             OJO_ijk = flip(flip(flip(OJO,1),2),3);
             OJO_ijk = circshift(OJO_ijk,ix,1);
             OJO_ijk = circshift(OJO_ijk,jx,2);
             OJO_ijk = circshift(OJO_ijk,kx,3);
             OJO_ijk = permute(OJO_ijk,[5,6,7,1,2,3,4]);
             
-            temp1 = sum(OJO_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*B)^3;
-            temp2 = sum(OJO_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*B)^3;
-            temp3 = sum(OJO_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*B)^3;
+            temp1 = sum(OJO_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*Bx)^3;
+            temp2 = sum(OJO_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*Bx)^3;
+            temp3 = sum(OJO_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*Bx)^3;
             
             dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx)-...
-                temp1*deriv_x(ix,B,L)-temp2*deriv_x(jx,B,L)-temp3*deriv_x(kx,B,L);
+                temp1*deriv_x(ix,Bx,L)-temp2*deriv_x(jx,Bx,L)-temp3*deriv_x(kx,Bx,L);
         end
     end
 end
@@ -320,13 +322,13 @@ for l = 0:lmax
             cl = (2*l1+1)*(2*l2+1)/(2*l+1);
             col = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
             ind1 = -l1+lmax+1:l1+lmax+1;
-            for ix = 1:2*B
+            for ix = 1:2*Bx
                 kron_FMR1 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,1),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*B,2*B]);
+                    permute(MR(ind2,ind2,l2+1,1),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
                 kron_FMR2 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,2),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*B,2*B]);
+                    permute(MR(ind2,ind2,l2+1,2),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
                 kron_FMR3 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,3),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*B,2*B]);
+                    permute(MR(ind2,ind2,l2+1,3),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
                 
                 kron_FMR1_gpu = gpuArray(kron_FMR1);
                 temp1(ind,ind,l+1,:,:,ix) = temp1(ind,ind,l+1,:,:,ix) + ...
@@ -350,7 +352,7 @@ for l = 0:lmax
     end
 end
 
-c = 2*pi*1i*[0:B-1,0,-B+1:-1]/L;
+c = 2*pi*1i*[0:Bx-1,0,-Bx+1:-1]/L;
 dF1 = dF1 - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]) - ...
     temp3.*permute(c,[1,3,4,5,6,2]);
 
@@ -378,16 +380,16 @@ end
 
 function [ ER, Ex, Varx, EvR, ExvR, EvRvR, U, S, V, P, Miu, Sigma ] = get_stat( f, R, x, w )
 
-B = size(R,3)/2;
+Bx = size(x,2)/2;
 L = x(1,end,1,1)+x(1,2,1,1)-2*x(1,1,1,1);
 
-fR = sum(f(:,:,:,:,:,:),[4,5,6])*(L/2/B)^3;
+fR = sum(f(:,:,:,:,:,:),[4,5,6])*(L/2/Bx)^3;
 ER = sum(R.*permute(fR,[4,5,1,2,3]).*permute(w,[1,4,3,2,5]),[3,4,5]);
 
 fx = permute(sum(f(:,:,:,:,:,:).*w,[1,2,3]),[1,4,5,6,2,3]);
-Ex = sum(x.*fx,[2,3,4])*(L/2/B)^3;
+Ex = sum(x.*fx,[2,3,4])*(L/2/Bx)^3;
 Varx = sum(permute(x,[1,5,2,3,4]).*permute(x,[5,1,2,3,4]).*...
-    permute(fx,[1,5,2,3,4]),[3,4,5])*(L/2/B)^3 - Ex*Ex.';
+    permute(fx,[1,5,2,3,4]),[3,4,5])*(L/2/Bx)^3 - Ex*Ex.';
 
 [U,D,V] = psvd(ER);
 try
@@ -403,7 +405,7 @@ try
     EvRvR = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
         permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
     ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
-        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/B)^3;
+        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/Bx)^3;
 
     covxx = Varx;
     covxvR = ExvR-Ex*EvR.';
