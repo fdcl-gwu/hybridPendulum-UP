@@ -18,13 +18,13 @@ if use_mex
 end
 
 % time
-sf = 10;
+sf = 100;
 T = 1;
 Nt = T*sf+1;
 
 % band limit
 BR = 10;
-Bx = 10;
+Bx = 15;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -289,7 +289,7 @@ end
 dF1 = gpuArray.zeros(size(Fold));
 for l = 0:lmax
     indmn = -l+lmax+1:l+lmax+1;
-    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:)-...
+    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,ix,jx,kx)-...
         pagefun(@mtimes,gpuArray(temp1(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,1).')-...
         pagefun(@mtimes,gpuArray(temp2(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,2).')-...
         pagefun(@mtimes,gpuArray(temp3(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,3).');
