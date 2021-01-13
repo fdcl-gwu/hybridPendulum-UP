@@ -39,7 +39,19 @@ Suppose $f>0$ and let $f = e^g$, then we have:
 \end{align*}
 So $g$ satisfies the following partial differential equation:
 \begin{align*}
-	\frac{\partial g}{\partial t} = \sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right)
+	\frac{\partial g}{\partial t} = -\sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right)
+\end{align*}
+
+\section{Pendulum Example}
+
+The Fokker-Planck equation for pendulum is
+\begin{align*}
+	\frac{\partial f(R,\Omega,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i (\Omega_if(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3)_i f(R,\Omega,t)\right] + \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 f(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
+\end{align*}
+Let $f = e^g$, then $g$ satisfies the following partial differential equation
+\begin{align*}
+	\frac{\partial g(R,\Omega,t)}{\partial t} = &-\sum_{i=1}^3 \Omega_i \liediff_ig(R,\Omega,t) + \sum_{i=1}^3 \frac{\partial (\Omega\times J\Omega)_i}{\partial \Omega_i} + \sum_{i=1}^3 (\Omega\times J\Omega + mg\rho\times R^Te_3)_i \frac{\partial g(R,\Omega,t)}{\partial \Omega_i} \\
+	&+ \sum_{i,j=1}^3 G_{ij} \left( \frac{\partial^2 g(R,\Omega,t)}{\partial\Omega_i \partial\Omega_j} + \frac{\partial g(R,\Omega,t)}{\partial\Omega_i} \frac{\partial g(R,\Omega,t)}{\partial\Omega_j}\right).
 \end{align*}
 
 \end{document}
