@@ -1,15 +1,17 @@
-function [ f, stat, MFG ] = pendulum( isreal, use_mex )
+function [ stat, MFG ] = pendulum( use_mex, path )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
 addpath('..');
 
-if ~exist('isreal','var') || isempty(isreal)
-    isreal = false;
-end
-
 if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
+end
+
+if exist('path','var') && ~isempty(path)
+    saveToFile = true;
+else
+    saveToFile = false;
 end
 
 if use_mex 
@@ -83,7 +85,7 @@ for j = 1:2*BR
 end
 
 % derivatives
-u = getu(lmax,isreal);
+u = getu(lmax);
 
 % CG coefficient
 warning('off','MATLAB:nearlySingularMatrix');
@@ -162,10 +164,13 @@ Sigma = 1^2*eye(3);
 
 c = pdf_MF_normal(diag(S));
 
-f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,(Nt-1)/(sf/10)+1);
-f(:,:,:,:,:,:,1) = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
+f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     permute(exp(sum(-0.5*permute((x-Miu),[1,5,2,3,4]).*permute((x-Miu),...
     [5,1,2,3,4]).*Sigma^-1,[1,2])),[1,2,6,3,4,5])/c/sqrt((2*pi)^3*det(Sigma));
+
+if saveToFile
+    save(strcat(path,'\f1'),'f');
+end
 
 % pre-allocate memory
 U = zeros(3,3,Nt);
@@ -183,18 +188,17 @@ ExvR = zeros(3,3,Nt);
 EvRvR = zeros(3,3,Nt);
 
 [ER(:,:,1),Ex(:,1),Varx(:,:,1),EvR(:,1),ExvR(:,:,1),EvRvR(:,:,1),...
-    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f(:,:,:,:,:,:,1),R,x,w);
+    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f,R,x,w);
 
 %% propagation
-f_temp = f(:,:,:,:,:,:,1);
-F_temp = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for nt = 1:Nt-1
     tic;
     
     % forward
     F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
     for k = 1:2*BR
-        F1(:,k,:,:,:,:) = fftn(f_temp(:,k,:,:,:,:));
+        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
     end
     F1 = fftshift(fftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
@@ -202,7 +206,7 @@ for nt = 1:Nt-1
     for l = 0:lmax
         for m = -l:l
             for n = -l:l
-                F_temp(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                F(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
                     permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
             end
         end
@@ -210,9 +214,9 @@ for nt = 1:Nt-1
     
     % propagating Fourier coefficients
     if use_mex
-        F_temp = pendulum_propagate(F_temp,X,OJO,MR,1/sf,L,u,CG);
+        F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG);
     else
-        F_temp = integrate(F_temp,X,OJO,MR,1/sf,L,u,CG);
+        F = integrate(F,X,OJO,MR,1/sf,L,u,CG);
     end
     
     % backward
@@ -220,7 +224,7 @@ for nt = 1:Nt-1
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
-            F_mn = F_temp(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
+            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
 
             for k = 1:2*BR
                 d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
@@ -235,15 +239,15 @@ for nt = 1:Nt-1
     F1 = ifftshift(ifftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
     for k = 1:2*BR
-        f_temp(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
-    end
-    
-    if rem(nt,sf/10)==0
-        f(:,:,:,:,:,:,nt/(sf/10)+1) = f_temp;
+        f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
     end
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
-        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f_temp,R,x,w);
+        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
+    
+    if saveToFile
+        save(strcat(path,'\f',num2str(nt+1)),'f');
+    end
     
     toc;
 end
@@ -262,9 +266,10 @@ MFG.Miu = Miu;
 MFG.Sigma = Sigma;
 MFG.P = P;
 
-save('D:f','f','-v7.3');
-save('D:stat','stat','-v7.3');
-save('D:MFG','MFG','-v7.3');
+if saveToFile
+    save(strcat(path,'\stat'),'stat');
+    save(strcat(path,'\MFG'),'MFG');
+end
 
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
@@ -309,7 +314,7 @@ end
 
 for l = 0:lmax
     indmn = -l+lmax+1:l+lmax+1;
-    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,ix,jx,kx)-...
+    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:)-...
         pagefun(@mtimes,temp1(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,1).')-...
         pagefun(@mtimes,temp2(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,2).')-...
         pagefun(@mtimes,temp3(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
