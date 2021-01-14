@@ -48,38 +48,18 @@ if isDensity
         Ntheta = 40;
         theta = linspace(-pi,pi-2*pi/Ntheta,Ntheta);
         
-        % 1d integration rule
-        d_t = 0.17;
-        ind_R = cell(Nt1,Nt2,3);
-        theta_R = cell(Nt1,Nt2,3);
-        for nt1 = 1:Nt1
-            for nt2 = 1:Nt2
-                rref = [s1(nt1,nt2);s2(nt1,nt2);s3(nt1,nt2)];
-                
-                for i = 1:3
-                    ind_R{nt1,nt2,i} = find(sqrt(sum((rref-R(:,i,:)).^2))<d_t);
-                    
-                    if isempty(ind_R{nt1,nt2,i})
-                        a = 1;
-                    end
-                    
-                    jk = setdiff(1:3,i);
-                    Rref(:,i) = rref;
-                    Rref(:,jk) = null(rref');
-                    D = eye(3);
-                    D(jk(1),jk(1)) = det(Rref);
-                    Rref = Rref*D;
-
-                    v = logRot(mulRot(Rref',R(:,:,ind_R{nt1,nt2,i})),'v');
-                    theta_R{nt1,nt2,i} = v(i,:);
-                    
-                    [theta_R{nt1,nt2,i},I] = sort(theta_R{nt1,nt2,i});
-                    ind_R{nt1,nt2,i} = ind_R{nt1,nt2,i}(I);
-                    
-                    [theta_R{nt1,nt2,i},I] = unique(theta_R{nt1,nt2,i});
-                    ind_R{nt1,nt2,i} = ind_R{nt1,nt2,i}(I);
-                end
-            end
+        % 3d interpolation
+        d_threshold = 0.4;
+        
+        try
+            ind_R = load(strcat(path,'\ind_R'));
+            ind_R = ind_R.ind_R;
+            v_R = load(strcat(path,'\v_R'));
+            v_R = v_R.v_R;
+        catch
+            [ind_R,v_R] = interpInd(R,s1,s2,s3,theta,d_threshold);
+            save(strcat(path,'\ind_R'),'ind_R');
+            save(strcat(path,'\v_R'),'v_R');
         end
         
         for nt = 1:Nt
@@ -89,15 +69,28 @@ if isDensity
             end
             
             fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
+            fR = reshape(fR,1,[]);
             
             c = zeros(Nt1,Nt2,3);
             for nt1 = 1:Nt1
                 for nt2 = 1:Nt2
                     for i = 1:3
-                        c(nt1,nt2,i) = sum(interp1(theta_R{nt1,nt2,i}',fR(ind_R{nt1,nt2,i}),theta,'nearest','extrap'))*(2*pi/Ntheta);
+                        for ntheta = 1:Ntheta
+                            v = v_R{nt1,nt2,ntheta,i};
+                            if size(v,1) > 1
+                                f_interp = scatteredInterpolant(v',fR(ind_R{nt1,nt2,ntheta,i})');
+                                c(nt1,nt2,i) = c(nt1,nt2,i) + f_interp(zeros(1,size(v,1)));
+                            else
+                                [v,I] = sort(v);
+                                ind_R{nt1,nt2,ntheta,i} = ind_R{nt1,nt2,ntheta,i}(I);
+                                c(nt1,nt2,i) = c(nt1,nt2,i) + interp1(v,fR(ind_R{nt1,nt2,ntheta,i}),0);
+                            end
+                        end
                     end
                 end
             end
+            
+            c = c*(2*pi/Ntheta);
             
             f = figure;
             surf(s1,s2,s3,sum(c,3),'LineStyle','none','FaceColor','interp');
@@ -108,7 +101,7 @@ if isDensity
             view([1,-1,0]);
             axis equal;
             
-            annotation('textbox','String',strcat('time: ',num2str((nt-1)/100),' s'),'Position',[0.15,0.85,0.16,0.07]);
+            annotation('textbox','String',strcat('time: ',num2str((nt-1)/100),' s'),'Position',[0.15,0.75,0.16,0.07]);
 
             M(nt) = getframe;
             close(f);
@@ -173,6 +166,52 @@ for i = 1:2*BR
 end
 
 R = reshape(R,3,3,(2*BR)^3);
+
+end
+
+
+function [ ind_R, v_R ] = interpInd( R, s1, s2, s3, theta, d )
+
+Nt1 = size(s1,1);
+Nt2 = size(s1,2);
+Ntheta = size(theta,2);
+
+ind_R = cell(Nt1,Nt2,Ntheta,3);
+v_R = cell(Nt1,Nt2,Ntheta,3);
+
+for i = 1:3
+    vref = [0;0;0];
+    vref(i) = 1;
+
+    for nt1 = 1:Nt1
+        for nt2 = 1:Nt2
+            rref = [s1(nt1,nt2);s2(nt1,nt2);s3(nt1,nt2)];
+
+            Rref = eye(3);
+            jk = setdiff(1:3,i);
+            Rref(:,i) = rref;
+            Rref(:,jk) = null(rref');
+            D = eye(3);
+            D(jk(1),jk(1)) = det(Rref);
+            Rref = Rref*D;
+            Rref = mulRot(Rref,expRot(vref.*theta));
+
+            for ntheta = 1:Ntheta
+                v = logRot(mulRot(Rref(:,:,ntheta)',R),'v');
+                ind_R{nt1,nt2,ntheta,i} = find(sqrt(sum(v.^2)) < d);
+                v = v(:,ind_R{nt1,nt2,ntheta,i});
+                            
+                v_isunique = false(3,1);
+                for j = 1:3
+                    v_isunique(j) = max(v(j,:))-min(v(j,:)) < 1e-14;
+                end
+
+                v(v_isunique,:) = [];
+                v_R{nt1,nt2,ntheta,i} = v;
+            end
+        end
+    end
+end
 
 end
 
