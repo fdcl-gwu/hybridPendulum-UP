@@ -44,5 +44,27 @@ Denote the Fourier coefficients of $fg$ as $H_{m,n}^l$, then
 	H^l = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} \frac{1}{2l+1} A_{l_1,l_2,l}.
 \end{align*}
 
+\section{Element-wise Formula}
+
+Let $C_{l_1,l_2,l,m}\in\real^{(2l_1+1)(2l_2+1)\times 1}$ be the $(l^2-(l_1-l_2)^2 + m+l+1)$-th column of $C_{l_1,l_2}$, then we have
+\begin{align*}
+	H^l_{m,n} = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} C_{l_1,l_2,l,m}^T F^{l_1}\otimes G^{l_2} C_{l_1,l_2,l,n}.
+\end{align*}
+Let $C_{l_1,l_2,l,m}$ be equally split into $2l_1+1$ parts, denoted by $C_{l_1,l_2,l,m}^\alpha \in \real^{2l_2+1}$ for $\alpha = -l_1,\ldots,l_1$.
+Also let $\tilde{C}_{l_1,l_2,l,m}\in\real^{(2l_2+1)\times(2l_1+1)} = \begin{bmatrix} C_{l_1,l_2,l,m}^{-l_1} & \cdots & C_{l_1,l_2,l,m}^{l_1} \end{bmatrix}$, then
+\begin{align*}
+	&C_{l_1,l_2,l,m}^T F^{l_1}\otimes G^{l_2} C_{l_1,l_2,l,n} \\
+	= &\begin{bmatrix} (C_{l_1,l_2,l,m}^{-l_1})^T & \cdots & (C_{l_1,l_2,l,m}^{l_1})^T \end{bmatrix} \begin{bmatrix} F_{-l_1,-l_1}^{l_1}G^{l_2} & \ldots & F_{-l_1,l_1}^{l_1}G^{l_2} \\ \vdots & \ddots & \vdots \\ F_{l_1,-l_1}^{l_1}G^{l_2} & \ldots & F_{l_1,l_1}^{l_1}G^{l_2} \end{bmatrix} \begin{bmatrix} (C_{l_1,l_2,l,m}^{-l_1}) \\ \vdots \\ (C_{l_1,l_2,l,m}^{l_1}) \end{bmatrix} \\
+	= &\sum_{\alpha,\beta=-l_1}^{l_1} F_{\alpha,\beta}^{l_1} \left( \tilde{C}_{l_1,l_2,l,m}^T G^{l_2} \tilde{C}_{l_1,l_2,l,n}\right)_{\alpha,\beta}.
+\end{align*}
+So, the formula for $H_{m,n}^l$ can be written as
+\begin{align*}
+	H^l_{m,n} = \sum_{\substack{\abs{l_1-l_2} \leq l \leq l_1+l_2 \\ 0 \leq l_1 \leq B-1 \\ 0 \leq l_2 \leq B-1}} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{\alpha,\beta=-l_1}^{l_1} F_{\alpha,\beta}^{l_1} \left( \tilde{C}_{l_1,l_2,l,m}^T G^{l_2} \tilde{C}_{l_1,l_2,l,n}\right)_{\alpha,\beta}.
+\end{align*}
+
+From the computational point of view, this is a memory-saving algorithm, since the large matrix $F^{l_1}\otimes G^{l_2} \in \mathbb{C}^{(2l_1+1)(2l_2+1) \times (2l_1+1)(2l_2+1)}$ is no longer calculated at one time.
+Instead, $\tilde{C}_{l_1,l_2,l,m}^T G^{l_2} \tilde{C}_{l_1,l_2,l,n} \in \mathbb{C}^{(2l_1+1) \times (2l_1+1)}$ is a much smaller matrix.
+Furthermore, matrix multiplication is well-supported by the open source BLAS library, whereas there is no highly optimized implementations for Kronecker product.
+
 \end{document}
 

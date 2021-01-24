@@ -65,56 +65,12 @@ __global__ void mulImg_FR(cuDoubleComplex* dF, const double c, const int nR, con
 	}
 }
 
-__global__ void kron_FMR(double* FMR_real, double* FMR_imag, const cuDoubleComplex* F, const cuDoubleComplex* MR,
-	const int ind_F_cumR, const int ind_MR_cumR, const bool iswrapped, const int c2l1p1, const int c2l2p1, const Size_F* size_F)
+__global__ void add_FMR(cuDoubleComplex* dF, const cuDoubleComplex* FMR, const int ind_cumR, const Size_F* size_F)
 {
-	if (!iswrapped) {
-		int ind_F = threadIdx.x + threadIdx.y*blockDim.x + ind_F_cumR + blockIdx.z*size_F->nR_compact;
-		int ind_MR = blockIdx.x + blockIdx.y*gridDim.x + ind_MR_cumR;
-	
-		int i_FMR = blockIdx.x + threadIdx.x*gridDim.x;
-		int j_FMR = blockIdx.y + threadIdx.y*gridDim.y;
-		int m = blockDim.x*gridDim.x;
+	int ind_dF = ind_cumR + (threadIdx.x + blockIdx.x*size_F->const_2Bx)*size_F->nR_compact + threadIdx.y*size_F->nTot_splitx;
+	int ind_FMR = threadIdx.x + blockIdx.x*size_F->const_2Bx + threadIdx.y*size_F->const_2Bxs;
 
-		int ind_FMR = i_FMR + j_FMR*m + blockIdx.z*m*m;
-
-		FMR_real[ind_FMR] = F[ind_F].x*MR[ind_MR].x - F[ind_F].y*MR[ind_MR].y;
-		FMR_imag[ind_FMR] = F[ind_F].x*MR[ind_MR].y + F[ind_F].y*MR[ind_MR].x;
-	} else {
-		int i_MR = (int) blockIdx.x / c2l2p1;
-		int r_F = blockIdx.x % c2l2p1;
-		int i_F = threadIdx.x + r_F*32;
-
-		int j_MR = (int) blockIdx.y / c2l2p1;
-		r_F = blockIdx.y % c2l2p1;
-		int j_F = threadIdx.x + r_F*32;
-
-		if (i_F < c2l1p1 && j_F < c2l1p1) {
-			int ind_F = i_F + j_F*c2l1p1 + ind_F_cumR + blockIdx.z*size_F->nR_compact;
-			int ind_MR = i_MR + j_MR*c2l2p1 + ind_MR_cumR;
-
-			int i_FMR = i_MR + i_F*c2l2p1;
-			int j_FMR = j_MR + j_F*c2l2p1;
-			int m = c2l1p1*c2l2p1;
-
-			int ind_FMR = i_FMR + j_FMR*m + blockIdx.z*m*m;
-
-			FMR_real[ind_FMR] = F[ind_F].x*MR[ind_MR].x - F[ind_F].y*MR[ind_MR].y;
-			FMR_imag[ind_FMR] = F[ind_F].x*MR[ind_MR].y + F[ind_F].y*MR[ind_MR].x;
-		}
-	}
-}
-
-__global__ void add_FMR(cuDoubleComplex* dF, const double* FMR_real, const double* FMR_imag, const int ind_cumR, const int c2lp1s, const Size_F* size_F)
-{
-	int ind_dF = threadIdx.x + blockIdx.x*512;
-	if (ind_dF < c2lp1s) {
-		int ind_FMR = ind_dF + blockIdx.y*c2lp1s;
-		ind_dF += ind_cumR + blockIdx.y*size_F->nR_compact;
-
-		dF[ind_dF].x += FMR_real[ind_FMR];
-		dF[ind_dF].y += FMR_imag[ind_FMR];
-	}
+	dF[ind_dF] = cuCadd(dF[ind_dF], FMR[ind_FMR]);
 }
 
 __global__ void mulImg_FTot(cuDoubleComplex* dF, const double* c, const int dim, const int k, const Size_F* size_F)
@@ -340,6 +296,55 @@ __host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionP
 	cutensorErrorHandle(cutensorInitContractionPlan(handle, plan, &desc, &find, *worksize));
 }
 
+__host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, Size_F size_F)
+{
+	int mode_Fold[3] = {'r','i','j'};
+	int mode_MR[2] = {'r','p'};
+	int mode_FMR[3] = {'i','j','p'};
+
+	int m = (2*l+1)*(2*l+1);
+
+	int64_t extent_Fold[3] = {m, size_F.const_2Bx, size_F.const_2Bx};
+	int64_t extent_MR[2] = {m, 3};
+	int64_t extent_FMR[3] = {size_F.const_2Bx, size_F.const_2Bx, 3};
+
+	cutensorTensorDescriptor_t desc_Fold;
+	cutensorTensorDescriptor_t desc_MR;
+	cutensorTensorDescriptor_t desc_FMR;
+	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_Fold,
+		3, extent_Fold, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_MR,
+		2, extent_MR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_FMR,
+		3, extent_FMR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+
+	uint32_t alignmentRequirement_Fold;
+	uint32_t alignmentRequirement_MR;
+	uint32_t alignmentRequirement_FMR;
+	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
+		Fold_dev, &desc_Fold, &alignmentRequirement_Fold));
+	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
+		MR_dev, &desc_MR, &alignmentRequirement_MR));
+	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
+		FMR_dev, &desc_FMR, &alignmentRequirement_FMR));
+
+	cutensorContractionDescriptor_t desc;
+	cutensorErrorHandle(cutensorInitContractionDescriptor(handle, &desc,
+		&desc_Fold, mode_Fold, alignmentRequirement_Fold,
+		&desc_MR, mode_MR, alignmentRequirement_MR,
+		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
+		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
+		CUTENSOR_COMPUTE_64F));
+
+	cutensorContractionFind_t find;
+	cutensorErrorHandle(cutensorInitContractionFind(handle, &find, CUTENSOR_ALGO_DEFAULT));
+
+	cutensorErrorHandle(cutensorContractionGetWorkspace(handle, &desc, &find, CUTENSOR_WORKSPACE_RECOMMENDED, worksize));
+
+	cutensorErrorHandle(cutensorInitContractionPlan(handle, plan, &desc, &find, *worksize));
+}
+
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx)
 {
 	size_F->BR = BR;
@@ -370,6 +375,5 @@ __host__ void init_Size_F(Size_F* size_F, int BR, int Bx)
 	size_F->nR_remainder = size_F->nR_compact % (size_F->ns-1);
 
 	size_F->nTot_splitx = size_F->nR_compact * size_F->const_2Bxs;
-	size_F->nTot_splitx2 = size_F->nR_compact * size_F->const_2Bx;
 }
 

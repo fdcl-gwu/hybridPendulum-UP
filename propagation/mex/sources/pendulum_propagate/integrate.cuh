@@ -36,16 +36,13 @@ struct Size_F {
 	int nR_remainder;
 
 	int nTot_splitx;
-	int nTot_splitx2;
 };
 
 __global__ void flip_shift(const cuDoubleComplex* X, cuDoubleComplex* X_ijk, const int is, const int js, const int ks, const Size_F* size_F);
 __global__ void addup_F(cuDoubleComplex* dF, Size_F* size_F);
 __global__ void add_F(cuDoubleComplex* dF, const cuDoubleComplex* F, const Size_F* size_F);
 __global__ void mulImg_FR(cuDoubleComplex* dF, const double c, const int nR, const Size_F* size_F);
-__global__ void kron_FMR(double* FMR_real, double* FMR_imag, const cuDoubleComplex* F, const cuDoubleComplex* MR,
-	const int ind_F_cumR, const int ind_MR_cumR, const bool iswrapped, const int c2l1p1, const int c2l2p1, const Size_F* size_F);
-__global__ void add_FMR(cuDoubleComplex* dF, const double* FMR_real, const double* FMR_imag, const int ind_cumR, const int c2lp1s, const Size_F* size_F);
+__global__ void add_FMR(cuDoubleComplex* dF, const cuDoubleComplex* FMR, const int ind_cumR, const Size_F* size_F);
 __global__ void mulImg_FTot(cuDoubleComplex* dF, const double* c, const int dim, const int k, const Size_F* size_F);
 __global__ void integrate_Fnew(cuDoubleComplex* Fnew, const cuDoubleComplex* Fold, const cuDoubleComplex* dF, const double dt, const Size_F* size_F);
 
@@ -62,5 +59,7 @@ __host__ void cublasErrorHandle(const cublasStatus_t& err);
 
 __host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
 	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const Size_F* size_F);
+__host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, Size_F size_F);
 
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx);
