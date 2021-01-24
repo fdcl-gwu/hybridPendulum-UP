@@ -345,43 +345,37 @@ end
 clear temp1 temp2 temp3
 
 % -mg*cross(rho,R'*e3)
-temp1 = zeros(size(Fold));
-temp2 = zeros(size(Fold));
-temp3 = zeros(size(Fold));
+temp1 = gpuArray.zeros(size(Fold));
+temp2 = gpuArray.zeros(size(Fold));
+temp3 = gpuArray.zeros(size(Fold));
 for l = 0:lmax
-    ind = -l+lmax+1:l+lmax+1;
     for l2 = 0:lmax
         ind2 = -l2+lmax+1:l2+lmax+1;
         l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
         for l1 = l1_all
             cl = (2*l1+1)*(2*l2+1)/(2*l+1);
-            col = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+            col = l^2-(l1-l2)^2;
             ind1 = -l1+lmax+1:l1+lmax+1;
-            for ix = 1:2*Bx
-                kron_FMR1 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,1),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
-                kron_FMR2 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,2),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
-                kron_FMR3 = reshape(permute(Fold(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
-                    permute(MR(ind2,ind2,l2+1,3),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
-                
-                kron_FMR1_gpu = gpuArray(kron_FMR1);
-                temp1(ind,ind,l+1,:,:,ix) = temp1(ind,ind,l+1,:,:,ix) + ...
-                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
-                    pagefun(@mtimes,kron_FMR1_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
-                clear kron_FMR1_gpu;
-                
-                kron_FMR2_gpu = gpuArray(kron_FMR2);
-                temp2(ind,ind,l+1,:,:,ix) = temp2(ind,ind,l+1,:,:,ix) + ...
-                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
-                    pagefun(@mtimes,kron_FMR2_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
-                clear kron_FMR2_gpu;
-                
-                kron_FMR3_gpu = gpuArray(kron_FMR3);
-                temp3(ind,ind,l+1,:,:,ix) = temp3(ind,ind,l+1,:,:,ix) + ...
-                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
-                    pagefun(@mtimes,kron_FMR3_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
-                clear kron_FMR3_gpu;
+            
+            for m = -l:l
+                col_m = col+m+l+1;
+                CG_m = reshape(CG{l1+1,l2+1}(:,col_m),2*l2+1,2*l1+1);
+                for n = -l:l
+                    col_n = col+n+l+1;
+                    CG_n = reshape(CG{l1+1,l2+1}(:,col_n),2*l2+1,2*l1+1);
+                    
+                    temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
+                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        MR(ind2,ind2,l2+1,1)), CG_n),[1,2]);
+
+                    temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
+                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        MR(ind2,ind2,l2+1,2)), CG_n),[1,2]);
+                    
+                    temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
+                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        MR(ind2,ind2,l2+1,3)), CG_n),[1,2]);
+                end
             end
         end
     end

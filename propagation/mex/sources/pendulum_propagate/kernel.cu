@@ -101,14 +101,14 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cutensorHandle_t handle_cutensor;
     cutensorInit(&handle_cutensor);
 
-    cutensorContractionPlan_t plan;
-    size_t worksize;
+    cutensorContractionPlan_t plan_conv;
+    size_t worksize_conv;
 
-    cutensor_initialize(&handle_cutensor, &plan, &worksize, Fold_dev, X_ijk_dev, dF_temp_dev, size_F);
+    cutensor_initConv(&handle_cutensor, &plan_conv, &worksize_conv, Fold_dev, X_ijk_dev, dF_temp_dev, size_F);
 
     void* work = nullptr;
-    if (worksize > 0)
-        cudaErrorHandle(cudaMalloc(&work, worksize));
+    if (worksize_conv > 0)
+        cudaErrorHandle(cudaMalloc(&work, worksize_conv));
 
     cuDoubleComplex alpha_cutensor = make_cuDoubleComplex(0-(double)1/size_F.nx,0);
     cuDoubleComplex beta_cutensor = make_cuDoubleComplex(0,0);
@@ -127,8 +127,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
                 cudaDeviceSynchronize();
 
-                cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan, (void*)&alpha_cutensor, Fold_dev, X_ijk_dev,
-                    (void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize, 0));
+                cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv, (void*)&alpha_cutensor, Fold_dev, X_ijk_dev,
+                    (void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize_conv, 0));
 
                 cudaDeviceSynchronize();
 
@@ -149,7 +149,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaFree(X_dev));
     cudaErrorHandle(cudaFree(X_ijk_dev));
     cudaErrorHandle(cudaFree(dF_temp_dev));
-    if (worksize > 0)
+    if (worksize_conv > 0)
         cudaErrorHandle(cudaFree(work));
 
     ////////////////
@@ -236,8 +236,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaMalloc(&dF_temp_dev, 3*size_F.nR_compact*sizeof(cuDoubleComplex)));
 
     // set up cutensor
-    if (worksize > 0)
-        cudaErrorHandle(cudaMalloc(&work, worksize));
+    if (worksize_conv > 0)
+        cudaErrorHandle(cudaMalloc(&work, worksize_conv));
 
     // set up blocksize and gridsize
     dim3 blocksize_512_nR(512, 1, 1);
@@ -252,8 +252,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
                 cudaDeviceSynchronize();
 
-                cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan, (void*)&alpha_cutensor, Fold_dev, OJO_ijk_dev,
-                    (void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize, 0));
+                cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv, (void*)&alpha_cutensor, Fold_dev, OJO_ijk_dev,
+                    (void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize_conv, 0));
 
                 double c[3];
                 deriv_x(c, i, size_F.Bx, *L);
@@ -286,7 +286,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaFree(OJO_dev));
     cudaErrorHandle(cudaFree(OJO_ijk_dev));
     cudaErrorHandle(cudaFree(dF_temp_dev));
-    if (worksize > 0)
+    if (worksize_conv > 0)
         cudaErrorHandle(cudaFree(work));
 
     /////////////
@@ -309,30 +309,38 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     mexPrintf("kronecker product begin\n");
 
     // set up arrays
-    double** CG_dev = new double* [size_F.BR*size_F.BR];
+    cuDoubleComplex** CG_dev = new cuDoubleComplex* [size_F.BR*size_F.BR];
     for (int l1 = 0; l1 <= size_F.lmax; l1++) {
         for (int l2 = 0; l2 <= size_F.lmax; l2++) {
             int m = (2*l1+1)*(2*l2+1);
             int ind_CG = l1+l2*size_F.BR;
-            cudaErrorHandle(cudaMalloc(&CG_dev[ind_CG], m*m*sizeof(double)));
-            cudaErrorHandle(cudaMemcpy(CG_dev[ind_CG], CG[ind_CG], m*m*sizeof(double), cudaMemcpyHostToDevice));
+            cudaErrorHandle(cudaMalloc(&CG_dev[ind_CG], m*m*sizeof(cuDoubleComplex)));
+            cudaErrorHandle(cudaMemset(CG_dev[ind_CG], 0, m*m*sizeof(cuDoubleComplex)));
+
+            double* CG_dev_d = (double*) CG_dev[ind_CG];
+            cudaErrorHandle(cudaMemcpy2D(CG_dev_d, 2*sizeof(double), CG[ind_CG], sizeof(double), sizeof(double), m*m, cudaMemcpyHostToDevice));
         }
+    }
+
+    cuDoubleComplex** Fold_strided = new cuDoubleComplex* [size_F.BR];
+    for (int l = 0; l <= size_F.lmax; l++) {
+        int ind = l*(2*l-1)*(2*l+1)/3;
+        int m = (2*l+1)*(2*l+1);
+        cudaErrorHandle(cudaMalloc(&Fold_strided[l], m*size_F.nx*sizeof(cuDoubleComplex)));
+        cudaErrorHandle(cudaMemcpy2D(Fold_strided[l], m*sizeof(cuDoubleComplex), Fold_compact+ind, size_F.nR_compact*sizeof(cuDoubleComplex),
+            m*sizeof(cuDoubleComplex), size_F.nx, cudaMemcpyHostToDevice));
     }
 
     cuDoubleComplex* MR_dev;
     cudaErrorHandle(cudaMalloc(&MR_dev, 3*size_F.nR_compact*sizeof(cuDoubleComplex)));
     cudaErrorHandle(cudaMemcpy(MR_dev, MR_compact, 3*size_F.nR_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-    double* FMR_real_dev;
-    double* FMR_imag_dev;
+    cuDoubleComplex* FMR_dev;
     int m = (2*size_F.lmax+1) * (2*size_F.lmax+1);
-    cudaErrorHandle(cudaMalloc(&FMR_real_dev, m*m*size_F.const_2Bxs*sizeof(double)));
-    cudaErrorHandle(cudaMalloc(&FMR_imag_dev, m*m*size_F.const_2Bxs*sizeof(double)));
+    cudaErrorHandle(cudaMalloc(&FMR_dev, 3*m*sizeof(cuDoubleComplex)));
 
-    double* FMR_real_temp_dev;
-    double* FMR_imag_temp_dev;
-    cudaErrorHandle(cudaMalloc(&FMR_real_temp_dev, (2*size_F.lmax+1)*m*size_F.const_2Bxs*sizeof(double)));
-    cudaErrorHandle(cudaMalloc(&FMR_imag_temp_dev, (2*size_F.lmax+1)*m*size_F.const_2Bxs*sizeof(double)));
+    cuDoubleComplex* FMR_temp_dev;
+    cudaErrorHandle(cudaMalloc(&FMR_temp_dev, 3*size_F.nx*sizeof(cuDoubleComplex)));
 
     cudaErrorHandle(cudaMemset(dF3_dev, 0, 3*size_F.nTot_compact*sizeof(cuDoubleComplex)));
 
@@ -346,89 +354,66 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaMalloc(&c_dev, size_F.const_2Bx*sizeof(double)));
     cudaErrorHandle(cudaMemcpy(c_dev, c, size_F.const_2Bx*sizeof(double), cudaMemcpyHostToDevice));
 
-    // set up cublas
-    double alpha_cublas_real = 1;
-    double beta_cublas_real = 0;
+    // set up cutensor
+    cutensorContractionPlan_t* plan_FMR = new cutensorContractionPlan_t [size_F.BR];
+    size_t* worksize_FMR = new size_t [size_F.BR];
+
+    for (int l1 = 0; l1 <= size_F.lmax; l1++) {
+        cutensor_initFMR(&handle_cutensor, &plan_FMR[l1], &worksize_FMR[l1], Fold_strided[l1], FMR_dev, FMR_temp_dev, l1, size_F);
+    }
+
+    size_t worksize_FMR_max = 0;
+    for (int l = 0; l <= size_F.lmax; l++) {
+        worksize_FMR_max = (worksize_FMR[l] > worksize_FMR_max) ? worksize_FMR[l] : worksize_FMR_max;
+    }
+
+    if (worksize_FMR_max > 0) {
+        cudaErrorHandle(cudaMalloc(&work, worksize_FMR_max));
+    }
+
+    // set up blocksize and gridsize
+    dim3 blocksize_addMFR(size_F.const_2Bx, size_F.const_2Bx, 1);
+    dim3 gridsize_addMFR(size_F.const_2Bx, 3, 1);
 
     // calculate
     for (int l = 0; l <= size_F.lmax; l++) {
-        dim3 blocksize_add_FMR((2*l+1)*(2*l+1), 1, 1);
-        dim3 gridsize_add_FMR(size_F.const_2Bxs, 1, 1);
-
         int ind_cumR = l*(2*l-1)*(2*l+1)/3;
 
         for (int l1 = 0; l1 <= size_F.lmax; l1++) {
-            int ind_F_cumR = l1*(2*l1-1)*(2*l1+1)/3;
-
             for (int l2 = 0; l2 <= size_F.lmax; l2++) {
-                int ind_MR_cumR = l2*(2*l2-1)*(2*l2+1)/3;
-
-                int ind_CG = l1+l2*size_F.BR;
-                int m = (2*l1+1)*(2*l2+1);
-                int ind_CG_l1l2 = (l*l-(l1-l2)*(l1-l2))*m;
-
                 if (abs(l1-l2)<=l && l1+l2>=l) {
-                    // BR <= 16
-                    dim3 blocksize_kron(2*l1+1, 2*l1+1, 1);
-                    dim3 gridsize_kron(2*l2+1, 2*l2+1, size_F.const_2Bxs);
+                    int ind_MR = l2*(2*l2-1)*(2*l2+1)/3;
+                    int ind_CG = l1+l2*size_F.BR;
+                    int l12 = (2*l1+1)*(2*l2+1);
 
-                    for (int k = 0; k < size_F.const_2Bx; k++) {
-                        int ind_Fold = k*size_F.nR_compact*size_F.const_2Bxs;
-                        for (int i = 0; i < 3; i++) {
-                            int ind_MR = i*size_F.nR_compact;
-                            int ind_dF = k*size_F.nR_compact*size_F.const_2Bxs + i*size_F.nTot_compact;
+                    alpha_cutensor.x = (double) -l12/(2*l+1);
 
-                            kron_FMR <<<gridsize_kron, blocksize_kron>>> (FMR_real_dev, FMR_imag_dev, Fold_dev+ind_Fold, MR_dev+ind_MR, ind_F_cumR, ind_MR_cumR, size_F_dev);
-                            cudaErrorHandle(cudaGetLastError());
+                    for (int m = -l; m <= l; m++) {
+                        int ind_CG_m = (l*l-(l1-l2)*(l1-l2)+m+l)*l12;
 
-                            // real part
-                            alpha_cublas_real = -1;
-                            cublasErrorHandle(cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N,
-                                2*l+1, m, m, &alpha_cublas_real, CG_dev[ind_CG]+ind_CG_l1l2, m, 0,
-                                FMR_real_dev, m, m*m, &beta_cublas_real, FMR_real_temp_dev, 2*l+1, (2*l+1)*m, size_F.const_2Bxs));
+                        for (int n = -l; n <= l; n++) {
+                            int ind_CG_n = (l*l-(l1-l2)*(l1-l2)+n+l)*l12;
+                            int ind_mnl = m+l + (n+l)*(2*l+1) + ind_cumR;
 
-                            alpha_cublas_real = (double) m/(2*l+1);
-                            cublasErrorHandle(cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N,
-                                2*l+1, 2*l+1, m, &alpha_cublas_real, FMR_real_temp_dev, 2*l+1, (2*l+1)*m,
-                                CG_dev[ind_CG]+ind_CG_l1l2, m, 0, &beta_cublas_real, FMR_real_dev, 2*l+1, (2*l+1)*(2*l+1), size_F.const_2Bxs));
+                            cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, 2*l1+1, 2*l2+1, 2*l2+1,
+                                &alpha_cublas, CG_dev[ind_CG]+ind_CG_m, 2*l2+1, 0, MR_dev+ind_MR, 2*l2+1, size_F.nR_compact,
+                                &beta_cublas, FMR_temp_dev, 2*l1+1, (2*l1+1)*(2*l2+1), 3));
 
-                            // imaginary part
-                            alpha_cublas_real = -1;
-                            cublasErrorHandle(cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N,
-                                2*l+1, m, m, &alpha_cublas_real, CG_dev[ind_CG]+ind_CG_l1l2, m, 0,
-                                FMR_imag_dev, m, m*m, &beta_cublas_real, FMR_imag_temp_dev, 2*l+1, (2*l+1)*m, size_F.const_2Bxs));
+                            cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, 2*l1+1, 2*l1+1, 2*l2+1,
+                                &alpha_cublas, FMR_temp_dev, 2*l1+1, (2*l1+1)*(2*l2+1), CG_dev[ind_CG]+ind_CG_n, 2*l2+1, 0,
+                                &beta_cublas, FMR_dev, 2*l1+1, (2*l1+1)*(2*l1+1), 3));
 
-                            alpha_cublas_real = (double) m/(2*l+1);
-                            cublasErrorHandle(cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N,
-                                2*l+1, 2*l+1, m, &alpha_cublas_real, FMR_imag_temp_dev, 2*l+1, (2*l+1)*m,
-                                CG_dev[ind_CG]+ind_CG_l1l2, m, 0, &beta_cublas_real, FMR_imag_dev, 2*l+1, (2*l+1)*(2*l+1), size_F.const_2Bxs));
+                            cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_FMR[l1], &alpha_cutensor, Fold_strided[l1],
+                                FMR_dev, &beta_cutensor, FMR_temp_dev, FMR_temp_dev, work, worksize_FMR[l1], 0));
 
-                            // add
-                            add_FMR <<<gridsize_add_FMR, blocksize_add_FMR>>> (dF3_dev+ind_dF, FMR_real_dev, FMR_imag_dev, ind_cumR, size_F_dev);
-
-                            /* // test
-                            if (l==1 && k==0 && i==0) {
-                                mexPrintf("l1 = %i, l2 = %i\n", l1, l2);
-
-                                double* FMR_real_test = new double[(2*l+1)*(2*l+1)*size_F.const_2Bxs];
-                                double* FMR_imag_test = new double[(2*l+1)*(2*l+1)*size_F.const_2Bxs];
-
-                                cudaErrorHandle(cudaMemcpy(FMR_real_test, FMR_real_dev, (2*l+1)*(2*l+1)*size_F.const_2Bxs*sizeof(double), cudaMemcpyDeviceToHost));
-                                cudaErrorHandle(cudaMemcpy(FMR_imag_test, FMR_imag_dev, (2*l+1)*(2*l+1)*size_F.const_2Bxs*sizeof(double), cudaMemcpyDeviceToHost));
-
-                                mexPrintf("(%e,%e) (%e,%e)\n", FMR_real_test[0], FMR_imag_test[0], FMR_real_test[1], FMR_imag_test[1]);
-                                mexPrintf("(%e,%e) (%e,%e)\n", FMR_real_test[(2*l+1)*(2*l+1)*size_F.const_2Bxs-2], FMR_imag_test[(2*l+1)*(2*l+1)*size_F.const_2Bxs-2],
-                                    FMR_real_test[(2*l+1)*(2*l+1)*size_F.const_2Bxs-1], FMR_imag_test[(2*l+1)*(2*l+1)*size_F.const_2Bxs-1]);
-
-                                cuDoubleComplex* dF_test = new cuDoubleComplex[2];
-                                cudaErrorHandle(cudaMemcpy(dF_test, dF3_dev, 2*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
-
-                                mexPrintf("(%e,%e) (%e,%e)\n", dF_test[0].x, dF_test[0].y, dF_test[1].x, dF_test[1].y);
-
-                                delete[] dF_test;
-                                delete[] FMR_real_test;
-                                delete[] FMR_imag_test;
+                            /* if (l==0) {
+                                cuDoubleComplex* FMR_test = new cuDoubleComplex [3*size_F.nx];
+                                cudaErrorHandle(cudaMemcpy(FMR_test, FMR_temp_dev, 3*size_F.nx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+                                mexPrintf("l1 = %i, l2 = %i, FMR = (%e,%e)\n", l1, l2, FMR_test[0].x, FMR_test[0].y);
+                                delete[] FMR_test;
                             } */
+
+                            add_FMR <<<gridsize_addMFR, blocksize_addMFR>>> (dF3_dev, FMR_temp_dev, ind_mnl, size_F_dev);
                         }
                     }
                 }
@@ -452,8 +437,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F_dev);
     cudaErrorHandle(cudaGetLastError());
 
-    // test
-    /* cuDoubleComplex* dF3_test = new cuDoubleComplex[3*size_F.nTot_compact];
+    /* // test
+    cuDoubleComplex* dF3_test = new cuDoubleComplex[3*size_F.nTot_compact];
     cudaErrorHandle(cudaMemcpy(dF3_test, dF3_dev, 3*size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
 
     mexPrintf("(%e,%e) (%e,%e)\n", dF3_test[0].x, dF3_test[0].y, dF3_test[1].x, dF3_test[1].y);
@@ -474,9 +459,13 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     // free memory
     cudaErrorHandle(cudaFree(dF3_dev));
     cudaErrorHandle(cudaFree(MR_dev));
-    cudaErrorHandle(cudaFree(FMR_real_dev));
-    cudaErrorHandle(cudaFree(FMR_imag_dev));
+    cudaErrorHandle(cudaFree(FMR_dev));
+    cudaErrorHandle(cudaFree(FMR_temp_dev));
     cudaErrorHandle(cudaFree(c_dev));
+
+    if (worksize_FMR_max > 0) {
+        cudaErrorHandle(cudaFree(work));
+    }
 
     for (int l1 = 0; l1 <= size_F.lmax; l1++) {
         for (int l2 = 0; l2 <= size_F.lmax; l2++) {
@@ -485,7 +474,13 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         }
     }
 
+    for (int l = 0; l <= size_F.lmax; l++) {
+        cudaErrorHandle(cudaFree(Fold_strided[l]));
+    }
+
     delete[] c;
+    delete[] plan_FMR;
+    delete[] worksize_FMR;
 
     ///////////////
     // integrate //

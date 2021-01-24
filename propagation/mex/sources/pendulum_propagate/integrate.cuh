@@ -36,7 +36,7 @@ __global__ void addup_F(cuDoubleComplex* dF, Size_F* size_F);
 __global__ void add_F(cuDoubleComplex* dF, const cuDoubleComplex* F, const Size_F* size_F);
 __global__ void mulImg_FR(cuDoubleComplex* dF, const double c, const Size_F* size_F);
 __global__ void kron_FMR(double* FMR_real, double* FMR_imag, const cuDoubleComplex* F, const cuDoubleComplex* MR, const int ind_F_cumR, const int ind_MR_cumR, const Size_F* size_F);
-__global__ void add_FMR(cuDoubleComplex* dF, const double* FMR_real, const double* FMR_imag, const int ind_cumR, const Size_F* size_F);
+__global__ void add_FMR(cuDoubleComplex* dF, const cuDoubleComplex* FMR, const int ind_cumR, const Size_F* size_F);
 __global__ void mulImg_FTot(cuDoubleComplex* dF, const double* c, const int dim, const Size_F* size_F);
 __global__ void integrate_Fnew(cuDoubleComplex* Fnew, const cuDoubleComplex* Fold, const cuDoubleComplex* dF, const double dt, const Size_F* size_F);
 
@@ -49,7 +49,9 @@ __host__ void cudaErrorHandle(const cudaError_t& err);
 __host__ void cutensorErrorHandle(const cutensorStatus_t& err);
 __host__ void cublasErrorHandle(const cublasStatus_t& err);
 
-__host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+__host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
 	cuDoubleComplex* Fold_dev, cuDoubleComplex* X_ijk_dev, cuDoubleComplex* dF_temp_dev, Size_F size_F);
+__host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, Size_F size_F);
 
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx);
