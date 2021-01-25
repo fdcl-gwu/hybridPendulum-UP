@@ -216,6 +216,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaFree(u_dev));
     cudaErrorHandle(cudaFree(dF_dev_result));
 
+    delete[] u_compact;
+
     /////////////
     // addup F //
     /////////////
@@ -563,8 +565,14 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     }
 
     delete[] c;
+    delete[] CG_dev;
+    delete[] Fold_strided;
+    delete[] dF3;
     delete[] plan_FMR;
     delete[] worksize_FMR;
+
+    delete[] MR_compact;
+    delete[] CG;
 
     ///////////////
     // integrate //
@@ -597,13 +605,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaFree(dF_dev));
     cudaErrorHandle(cudaFree(size_F_dev));
 
-    delete[] dF3;
     delete[] dF;
-
     delete[] Fold_compact;
     delete[] Fnew_compact;
-    delete[] u_compact;
-    delete[] MR_compact;
-    delete[] CG;
 }
 

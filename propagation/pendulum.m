@@ -169,7 +169,7 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     [5,1,2,3,4]).*Sigma^-1,[1,2])),[1,2,6,3,4,5])/c/sqrt((2*pi)^3*det(Sigma));
 
 if saveToFile
-    save(strcat(path,'\f1'),'f');
+    save(strcat(path,'\f1'),'f','-v7.3');
 end
 
 % pre-allocate memory
@@ -246,7 +246,7 @@ for nt = 1:Nt-1
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
     
     if saveToFile
-        save(strcat(path,'\f',num2str(nt+1)),'f');
+        save(strcat(path,'\f',num2str(nt+1)),'f','-v7.3');
     end
     
     toc;
