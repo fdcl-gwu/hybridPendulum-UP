@@ -1,4 +1,5 @@
-function [ f, ER, S ] = avR( isreal )
+function [ f, ER, S ] = avR_num( isreal, method )
+
 close all;
 
 addpath('../rotation3d');
@@ -9,6 +10,10 @@ if ~exist('isreal','var') || isempty(isreal)
     isreal = false;
 end
 
+if ~exist('method','var') || isempty(method)
+    method = 'euler';
+end
+
 % time
 sf = 100;
 T = 1;
@@ -16,7 +21,7 @@ T = 1;
 Nt = T*sf+1;
 
 % band limit
-B = 10;
+B = 15;
 
 % grid
 alpha = reshape(pi/B*(0:(2*B-1)),1,1,[]);
@@ -120,9 +125,10 @@ if isreal
         T{l+1} = T{l+1}/sqrt(2);
     end
     
+    cg = cell(B,B);
     for l1 = 0:lmax
         for l2 = 0:lmax
-            CG{l1+1,l2+1} = kron(conj(T{l1+1}),conj(T{l2+1}))...
+            cg{l1+1,l2+1} = kron(conj(T{l1+1}),conj(T{l2+1}))...
                 *CG{l1+1,l2+1}*blkdiag(T{abs(l1-l2)+1:l1+l2+1}).';
         end
     end
@@ -131,23 +137,27 @@ end
 % initial condition
 f = zeros(2*B,2*B,2*B,Nt);
 s0 = [0,0,0];
-cS = pdf_MF_normal(s0);
 initR = expRot(pi/2*[0,0,0]);
-
-f(:,:,:,1) = permute(exp(sum(initR'*diag(s0).*R,[1,2]))/cS,[3,4,5,1,2]);
+for i = 1:2*B
+    for j = 1:2*B
+        for k = 1:2*B
+            f(i,j,k) = exp(trace(initR'*diag(s0)...
+                *R(:,:,i,j,k)))/pdf_MF_normal(s0);
+        end
+    end
+end
 
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,Nt);
 
 % angular velocity
 k_o = -5;
 G = diag([1,1,1]);
-Rd = expRot([0,0,0]);
 
 omega = zeros(2*B,2*B,2*B,3);
 for i = 1:2*B
     for j = 1:2*B
         for k = 1:2*B
-            omega(i,j,k,:) = 0.5*k_o*vee(G*Rd.'*R(:,:,i,j,k)-R(:,:,i,j,k).'*Rd*G,[],false); 
+            omega(i,j,k,:) = 0.5*k_o*vee(G*R(:,:,i,j,k)-R(:,:,i,j,k).'*G,[],false); 
         end
     end
 end
@@ -215,60 +225,10 @@ end
 H = diag([pi/4,pi/4,pi/4]);
 G = H*H';
 
-%% coefficient matrix
-% product of functions
-F_tot = (lmax+1)*(2*lmax+1)*(2*lmax+3)/3;
-A = zeros(F_tot,F_tot);
-
-for l = 0:lmax
-    tic;
-    row = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
-    ind_u = -l+lmax+1:l+lmax+1;
-    
-    % drift
-    for l2 = 0:lmax
-        col = l2*(2*l2-1)*(2*l2+1)/3+1 : (l2+1)*(2*l2+1)*(2*l2+3)/3;
-        l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
-        
-        temp_l2 = zeros((2*l+1)^2,(2*l2+1)^2,3);
-        for l1 = l1_all
-            cl = (2*l1+1)*(2*l2+1)/(2*l+1);
-            col_C = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
-            
-            temp_l1 = zeros((2*l+1)^2,(2*l2+1)^2,3);
-            for j = -l1:l1
-                row_C1 = (j+l1)*(2*l2+1)+1 : (j+l1+1)*(2*l2+1);
-                for k = -l1:l1
-                    row_C2 = (k+l1)*(2*l2+1)+1 : (k+l1+1)*(2*l2+1);
-                    CG_kron = kron(CG{l1+1,l2+1}(row_C2,col_C)',...
-                            CG{l1+1,l2+1}(row_C1,col_C).');
-                    temp_l1 = temp_l1-permute(OMEGA(j+lmax+1,k+lmax+1,l1+1,:),[1,2,4,3]).*CG_kron;
-                end
-            end
-            temp_l2 = temp_l2+cl*temp_l1;
-        end
-        
-        for i = 1:3
-            temp_l2(:,:,i) = kron(u(ind_u,ind_u,l+1,i),eye(2*l+1,2*l+1))*temp_l2(:,:,i);
-        end
-        A(row,col) = sum(temp_l2,3);
-    end
-    
-    % diffusion
-    for i = 1:3
-        for j = 1:3
-            A(row,row) = A(row,row)+0.5*G(i,j)*kron(u(ind_u,ind_u,l+1,i)*...
-                u(ind_u,ind_u,l+1,j),eye(2*l+1));
-        end
-    end
-    
-    toc;
-end
-
-expA = expm(A/sf);
-
 %% propagation
 for nt = 1:Nt-1
+    tic;
+    
     if isreal
         S12 = zeros(2*B,2*B,2*B);
         for kk = 1:2*B
@@ -299,38 +259,35 @@ for nt = 1:Nt-1
             end
         end
     else
-        F1 = zeros(2*B,2*B,2*B);
-        for k = 1:2*B
-            F1(:,k,:) = fftn(f(:,k,:,nt));
+        S1 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for kk = 1:2*B
+                S1(ii,:,kk) = fftshift(ifft(f(:,ii,kk,nt)))*(2*B);
+            end
         end
-        F1 = fftshift(fftshift(F1,1),3);
-        F1 = flip(flip(F1,1),3);
+
+        S2 = zeros(2*B,2*B,2*B);
+        for ii = 1:2*B
+            for jj = 1:2*B
+                S2(ii,jj,:) = fftshift(ifft(S1(ii,jj,:)))*(2*B);
+            end
+        end
 
         for l = 0:lmax
-            for m = -l:l
-                for n = -l:l
-                    F(m+lmax+1,n+lmax+1,l+1,nt) = sum(w.*F1(m+lmax+1,:,n+lmax+1).*...
-                        permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]));
+            for jj = -l:l
+                for kk = -l:l
+                    F(jj+lmax+1,kk+lmax+1,l+1,nt) = sum(w.*S2(:,jj+lmax+2,kk+lmax+2).'.*...
+                        reshape(d(jj+lmax+1,kk+lmax+1,l+1,:),1,[]));
                 end
             end
         end
     end
     
     % propagating Fourier coefficients
-    F_col = zeros(F_tot,1);
-    
-    for l = 0:lmax
-        ind_col = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
-        ind = -l+lmax+1 : l+lmax+1;
-        F_col(ind_col) = reshape(F(ind,ind,l+1,nt),[],1);
-    end
-    
-    F_col = expA*F_col;
-    
-    for l = 0:lmax
-        ind_col = l*(2*l-1)*(2*l+1)/3+1 : (l+1)*(2*l+1)*(2*l+3)/3;
-        ind = -l+lmax+1 : l+lmax+1;
-        F(ind,ind,l+1,nt+1) = reshape(F_col(ind_col),2*l+1,2*l+1);
+    if isreal
+        F(:,:,:,nt+1) = integrate(F(:,:,:,nt),OMEGA,1/sf,cg,u,G,isreal,method);
+    else
+        F(:,:,:,nt+1) = integrate(F(:,:,:,nt),OMEGA,1/sf,CG,u,G,isreal,method);
     end
     
     % inverse transform
@@ -371,7 +328,7 @@ for nt = 1:Nt-1
             end
         end
     else
-        F1 = zeros(2*B-1,2*B,2*B-1);
+        S2 = zeros(2*B,2*B-1,2*B-1);
         for m = -lmax:lmax
             for n = -lmax:lmax
                 lmin = max(abs(m),abs(n));
@@ -379,20 +336,32 @@ for nt = 1:Nt-1
 
                 for k = 1:2*B
                     d_jk_betak = reshape(d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k),1,[]);
-                    F1(m+lmax+1,k,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
+                    S2(k,m+lmax+1,n+lmax+1) = sum((2*(lmin:lmax)+1).*F_mn.*d_jk_betak);
                 end
             end
         end
 
-        F1 = cat(1,F1,zeros(1,2*B,2*B-1));
-        F1 = cat(3,F1,zeros(2*B,2*B,1));
-        F1 = ifftshift(ifftshift(F1,1),3);
-        F1 = flip(flip(F1,1),3);
-
-        for k = 1:2*B
-            f(:,k,:,nt+1) = ifftn(F1(:,k,:),'symmetric')*(2*B)^2;
+        S1 = zeros(2*B,2*B-1,2*B);
+        for i = 1:2*B
+            for j = 1:2*B-1
+                for k = 1:2*B
+                    S1(i,j,k) = sum(exp(-1i*(-B+1:B-1)*gamma(k)).*reshape(S2(i,j,:),1,[]));
+                end
+            end
         end
+
+        for i = 1:2*B
+            for j = 1:2*B
+                for k = 1:2*B
+                    f(j,i,k,nt+1) = sum(exp(-1i*(-B+1:B-1)*alpha(j)).*S1(i,:,k));
+                end
+            end
+        end
+        
+        f(:,:,:,nt+1) = real(f(:,:,:,nt+1));
     end
+    
+    toc;
 end
 
 %% match to matrix Fisher and plot
@@ -429,7 +398,7 @@ s3 = repmat(cos(theta2),Nt1,1);
 
 % color map
 color = zeros(100,100,3,Nt);
-for nt = 1:Nt
+for nt = 1:1:Nt
     cF = pdf_MF_normal(S(:,nt));
     F = U(:,:,nt)*diag(S(:,nt))*V(:,:,nt).';
     
@@ -455,7 +424,7 @@ end
 color = real(color);
 
 % plot
-for nt = 1:Nt
+for nt = 1:1:Nt
     figure(nt);
     surf(s1,s2,s3,sum(color(:,:,:,nt),3),'LineStyle','none');
     
@@ -469,4 +438,208 @@ rmpath('..');
 
 end
 
+
+function [ Fnew ] = integrate( Fold, OMEGA, dt, CG, u, G, isreal, method )
+
+lmax = size(Fold,3)-1;
+
+dF1 = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+for i = 1:3
+    for l1 = 0:lmax
+        for l2 = 0:lmax
+            indOMEGA = -l1+lmax+1:l1+lmax+1;
+            indF = -l2+lmax+1:l2+lmax+1;
+        
+            if isreal
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),Fold(indF,indF,l2+1))*conj(CG{l1+1,l2+1});
+            else
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),Fold(indF,indF,l2+1))*CG{l1+1,l2+1};
+            end
+            A = A*(2*l1+1)*(2*l2+1);
+            
+            for l = 0:lmax
+                if l>=abs(l1-l2) && l<=l1+l2
+                    indA = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                    inddF1 = -l+lmax+1:l+lmax+1;
+                    dF1(inddF1,inddF1,l+1,i) = dF1(inddF1,inddF1,l+1,i)-A(indA,indA)/(2*l+1);
+                end
+            end
+        end
+    end
+end
+
+for i = 1:3
+    for l = 0:lmax
+        ind = -l+lmax+1:l+lmax+1;
+        dF1(ind,ind,l+1,i) = dF1(ind,ind,l+1,i)*u(ind,ind,l+1,i).';
+    end
+end
+dF1 = sum(dF1,4);
+
+for l = 0:lmax
+    ind = -l+lmax+1:l+lmax+1;
+    for i = 1:3
+        for j = 1:3
+            dF1(ind,ind,l+1) = dF1(ind,ind,l+1) + 0.5*G(i,j)*Fold(ind,ind,l+1)*...
+                u(ind,ind,l+1,j).'*u(ind,ind,l+1,i).';
+        end
+    end
+end
+
+% euler method
+if strcmpi(method,'euler')
+    Fnew = Fold+dF1*dt;
+    return;
+end
+
+% midpoint method
+F2 = Fold+dF1*dt/2;
+dF2 = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+
+for i = 1:3
+    for l1 = 0:lmax
+        for l2 = 0:lmax
+            indOMEGA = -l1+lmax+1:l1+lmax+1;
+            indF = -l2+lmax+1:l2+lmax+1;
+            
+            if isreal
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F2(indF,indF,l2+1))*conj(CG{l1+1,l2+1});
+            else
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F2(indF,indF,l2+1))*CG{l1+1,l2+1};
+            end
+            A = A*(2*l1+1)*(2*l2+1);
+            
+            for l = 0:lmax
+                if l>=abs(l1-l2) && l<=l1+l2
+                    indA = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                    inddF1 = -l+lmax+1:l+lmax+1;
+                    dF2(inddF1,inddF1,l+1,i) = dF2(inddF1,inddF1,l+1,i)-A(indA,indA)/(2*l+1);
+                end
+            end
+        end
+    end
+end
+
+for i = 1:3
+    for l = 0:lmax
+        ind = -l+lmax+1:l+lmax+1;
+        dF2(ind,ind,l+1,i) = dF2(ind,ind,l+1,i)*u(ind,ind,l+1,i).';
+    end
+end
+dF2 = sum(dF2,4);
+
+for l = 0:lmax
+    ind = -l+lmax+1:l+lmax+1;
+    for i = 1:3
+        for j = 1:3
+            dF2(ind,ind,l+1) = dF2(ind,ind,l+1) + 0.5*G(i,j)*F2(ind,ind,l+1)*...
+                u(ind,ind,l+1,j).'*u(ind,ind,l+1,i).';
+        end
+    end
+end
+
+if strcmpi(method,'midpoint')
+    Fnew = Fold+dt*dF2;
+    return;
+end
+
+% Runge-Kutta method
+F3 = Fold + dF2*dt/2;
+dF3 = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+
+for i = 1:3
+    for l1 = 0:lmax
+        for l2 = 0:lmax
+            indOMEGA = -l1+lmax+1:l1+lmax+1;
+            indF = -l2+lmax+1:l2+lmax+1;
+            
+            if isreal
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F3(indF,indF,l2+1))*conj(CG{l1+1,l2+1});
+            else
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F3(indF,indF,l2+1))*CG{l1+1,l2+1};
+            end
+            A = A*(2*l1+1)*(2*l2+1);
+            
+            for l = 0:lmax
+                if l>=abs(l1-l2) && l<=l1+l2
+                    indA = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                    inddF1 = -l+lmax+1:l+lmax+1;
+                    dF3(inddF1,inddF1,l+1,i) = dF3(inddF1,inddF1,l+1,i)-A(indA,indA)/(2*l+1);
+                end
+            end
+        end
+    end
+end
+
+for i = 1:3
+    for l = 0:lmax
+        ind = -l+lmax+1:l+lmax+1;
+        dF3(ind,ind,l+1,i) = dF3(ind,ind,l+1,i)*u(ind,ind,l+1,i).';
+    end
+end
+dF3 = sum(dF3,4);
+
+for l = 0:lmax
+    ind = -l+lmax+1:l+lmax+1;
+    for i = 1:3
+        for j = 1:3
+            dF3(ind,ind,l+1) = dF3(ind,ind,l+1) + 0.5*G(i,j)*F3(ind,ind,l+1)*...
+                u(ind,ind,l+1,j).'*u(ind,ind,l+1,i).';
+        end
+    end
+end
+
+F4 = Fold+dF3*dt;
+dF4 = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+
+for i = 1:3
+    for l1 = 0:lmax
+        for l2 = 0:lmax
+            indOMEGA = -l1+lmax+1:l1+lmax+1;
+            indF = -l2+lmax+1:l2+lmax+1;
+            
+            if isreal
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F4(indF,indF,l2+1))*conj(CG{l1+1,l2+1});
+            else
+                A = CG{l1+1,l2+1}.'*kron(OMEGA(indOMEGA,indOMEGA,l1+1,i),F4(indF,indF,l2+1))*CG{l1+1,l2+1};
+            end
+            A = A*(2*l1+1)*(2*l2+1);
+            
+            for l = 0:lmax
+                if l>=abs(l1-l2) && l<=l1+l2
+                    indA = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
+                    inddF1 = -l+lmax+1:l+lmax+1;
+                    dF4(inddF1,inddF1,l+1,i) = dF4(inddF1,inddF1,l+1,i)-A(indA,indA)/(2*l+1);
+                end
+            end
+        end
+    end
+end
+
+for i = 1:3
+    for l = 0:lmax
+        ind = -l+lmax+1:l+lmax+1;
+        dF4(ind,ind,l+1,i) = dF4(ind,ind,l+1,i)*u(ind,ind,l+1,i).';
+    end
+end
+dF4 = sum(dF4,4);
+
+for l = 0:lmax
+    ind = -l+lmax+1:l+lmax+1;
+    for i = 1:3
+        for j = 1:3
+            dF4(ind,ind,l+1) = dF4(ind,ind,l+1) + 0.5*G(i,j)*F4(ind,ind,l+1)*...
+                u(ind,ind,l+1,j).'*u(ind,ind,l+1,i).';
+        end
+    end
+end
+
+if strcmpi(method,'runge-kutta')
+    Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
+    return;
+end
+
+error('''method'' must be one of ''euler'',''midpoint'', or ''Runge-Kutta''');
+
+end
 
