@@ -4,7 +4,7 @@ close all;
 
 addpath('..\rotation3d');
 
-if (size(varargin{1},1)==3 && size(varargin{2},1)==3)
+if (size(varargin{1},1)==3 && size(varargin{1},2)==3)
     isDensity = false;
     R = varargin{1};
 else

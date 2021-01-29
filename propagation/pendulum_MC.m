@@ -3,7 +3,7 @@ function [ stat, MFG, R, x ] = pendulum_MC(  )
 addpath('../matrix Fisher');
 addpath('../rotation3d');
 
-Ns = 100000;
+Ns = 1000000;
 
 % parameters
 Jd = diag([1,2,3]);
@@ -31,19 +31,9 @@ x(:,:,1) = mvnrnd(Miu,Sigma,Ns)';
 
 % simulate
 for nt = 1:Nt-1
-%     dx = J^-1*(-cross(x(:,:,nt),J*x(:,:,nt))-...
-%         m*g*cross(repmat(rho,1,Ns),permute(R(3,:,:,nt),[2,3,1])));
-%     x(:,:,nt+1) = x(:,:,nt)+dx/sf;
-%     R(:,:,:,nt+1) = mulRot(R(:,:,:,nt),expRot(x(:,:,nt)/sf));
-
-    M = -m*g*cross(repmat(rho,1,Ns),permute(R(3,:,:,nt),[2,3,1]));
-    dR = variation_dR(x(:,:,nt),M,1/sf,J);
-    R(:,:,:,nt+1) = gather(mulRot(R(:,:,:,nt),dR));
-    
-    M2 = -m*g*cross(repmat(rho,1,Ns),permute(R(3,:,:,nt+1),[2,3,1]));
-    x(:,:,nt+1) = gather(J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x(:,:,nt),[1,3,2])),[1,3,2]) + ...
-        1/sf/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + ...
-        1/sf/2*M2));
+    tic;
+    [R(:,:,:,nt+1),x(:,:,nt+1)] = LGVI(R(:,:,:,nt),x(:,:,nt),1/sf,m,rho,J,g);
+    toc;
 end
 
 % statistics
@@ -98,14 +88,18 @@ rmpath('../rotation3d');
 end
 
 
-function [ dR ] = variation_dR( x, M, dt, J )
+function [ R, x ] = LGVI( R, x, dt, m, rho, J, g)
+
+Ns = size(R,3);
 
 x = gpuArray(x);
-M = gpuArray(M);
+R = gpuArray(R);
 
-Ns = size(x,2);
+M = -m*g*permute(cat(1,rho(2)*R(3,3,:)-rho(3)*R(3,2,:),...
+    rho(3)*R(3,1,:)-rho(1)*R(3,3,:),...
+    rho(1)*R(3,2,:)-rho(2)*R(3,1,:)),[1,3,2]);
+
 dR = gpuArray.zeros(3,3,Ns);
-
 A = dt*J*x+dt^2/2*M;
 
 % G
@@ -138,7 +132,6 @@ alpha = 1;
 n_finished = 0;
 ind = 1:Ns;
 
-tic;
 n_step = 0;
 while n_finished < Ns
     ind_finished = find(normv(A-Gv(v))<epsilon);
@@ -152,7 +145,15 @@ while n_finished < Ns
     
     n_step = n_step+1;
 end
-toc;
+
+R = gather(mulRot(R,dR));
+    
+M2 = -m*g*permute(cat(1,rho(2)*R(3,3,:)-rho(3)*R(3,2,:),...
+    rho(3)*R(3,1,:)-rho(1)*R(3,3,:),...
+    rho(1)*R(3,2,:)-rho(2)*R(3,1,:)),[1,3,2]);
+x = gather(J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x,[1,3,2])),[1,3,2]) + ...
+    dt/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + ...
+    dt/2*M2));
 
 end
 

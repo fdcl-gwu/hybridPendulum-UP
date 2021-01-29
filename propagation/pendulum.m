@@ -1,4 +1,4 @@
-function [ stat, MFG ] = pendulum( use_mex, path )
+function [ stat, MFG ] = pendulum( use_mex, method, path )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -6,6 +6,10 @@ addpath('..');
 
 if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
+end
+
+if ~exist('method','var') || isempty(method)
+    method = 'euler';
 end
 
 if exist('path','var') && ~isempty(path)
@@ -216,7 +220,7 @@ for nt = 1:Nt-1
     if use_mex
         F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG);
     else
-        F = integrate(F,X,OJO,MR,1/sf,L,u,CG);
+        F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method);
     end
     
     % backward
@@ -281,21 +285,54 @@ end
 end
 
 
-function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG )
+function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG, method )
 
-BR = size(Fold,3);
-Bx = size(Fold,4)/2;
+u = gpuArray(u);
+dF1 = derivative(gpuArray(Fold),X,OJO,MR,L,u,CG);
+
+if strcmpi(method,'euler')
+    Fnew = gather(Fold+dt*dF1);
+    return;
+end
+
+% midpoint method
+F2 = Fold+dF1*dt/2;
+dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG);
+
+if strcmpi(method,'midpoint')
+    Fnew = Fold+dt*dF2;
+    return;
+end
+
+% Runge-Kutta method
+F3 = Fold + dF2*dt/2;
+dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG);
+
+F4 = Fold + dF3*dt;
+dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG);
+
+if strcmpi(method,'runge-kutta')
+    Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
+    return;
+end
+
+error('''method'' must be one of ''euler'',''midpoint'', or ''Runge-Kutta''');
+
+end
+
+
+function [ dF ] = derivative( F, X, OJO, MR, L, u, CG )
+
+BR = size(F,3);
+Bx = size(F,4)/2;
 lmax = BR-1;
 
-Fold = gpuArray(Fold);
-u = gpuArray(u);
-
-dF1 = gpuArray.zeros(size(Fold));
+dF = gpuArray.zeros(size(F));
 
 % Omega hat
-temp1 = gpuArray.zeros(size(dF1));
-temp2 = gpuArray.zeros(size(dF1));
-temp3 = gpuArray.zeros(size(dF1));
+temp1 = gpuArray.zeros(size(dF));
+temp2 = gpuArray.zeros(size(dF));
+temp3 = gpuArray.zeros(size(dF));
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
@@ -305,16 +342,16 @@ for ix = 1:2*Bx
             X_ijk = circshift(X_ijk,kx,3);
             X_ijk = permute(X_ijk,[5,6,7,1,2,3,4]);
             
-            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*Bx)^3;
-            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*Bx)^3;
-            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*Bx)^3;
+            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*F,[4,5,6])/(2*Bx)^3;
+            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*F,[4,5,6])/(2*Bx)^3;
+            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*F,[4,5,6])/(2*Bx)^3;
         end
     end
 end
 
 for l = 0:lmax
     indmn = -l+lmax+1:l+lmax+1;
-    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:)-...
+    dF(indmn,indmn,l+1,:,:,:) = dF(indmn,indmn,l+1,:,:,:)-...
         pagefun(@mtimes,temp1(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,1).')-...
         pagefun(@mtimes,temp2(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,2).')-...
         pagefun(@mtimes,temp3(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
@@ -332,11 +369,11 @@ for ix = 1:2*Bx
             OJO_ijk = circshift(OJO_ijk,kx,3);
             OJO_ijk = permute(OJO_ijk,[5,6,7,1,2,3,4]);
             
-            temp1 = sum(OJO_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*Bx)^3;
-            temp2 = sum(OJO_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*Bx)^3;
-            temp3 = sum(OJO_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*Bx)^3;
+            temp1 = sum(OJO_ijk(:,:,:,:,:,:,1).*F,[4,5,6])/(2*Bx)^3;
+            temp2 = sum(OJO_ijk(:,:,:,:,:,:,2).*F,[4,5,6])/(2*Bx)^3;
+            temp3 = sum(OJO_ijk(:,:,:,:,:,:,3).*F,[4,5,6])/(2*Bx)^3;
             
-            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx)-...
+            dF(:,:,:,ix,jx,kx) = dF(:,:,:,ix,jx,kx)-...
                 temp1*deriv_x(ix,Bx,L)-temp2*deriv_x(jx,Bx,L)-temp3*deriv_x(kx,Bx,L);
         end
     end
@@ -345,9 +382,9 @@ end
 clear temp1 temp2 temp3
 
 % -mg*cross(rho,R'*e3)
-temp1 = gpuArray.zeros(size(Fold));
-temp2 = gpuArray.zeros(size(Fold));
-temp3 = gpuArray.zeros(size(Fold));
+temp1 = gpuArray.zeros(size(F));
+temp2 = gpuArray.zeros(size(F));
+temp3 = gpuArray.zeros(size(F));
 for l = 0:lmax
     for l2 = 0:lmax
         ind2 = -l2+lmax+1:l2+lmax+1;
@@ -365,15 +402,15 @@ for l = 0:lmax
                     CG_n = reshape(CG{l1+1,l2+1}(:,col_n),2*l2+1,2*l1+1);
                     
                     temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
                         MR(ind2,ind2,l2+1,1)), CG_n),[1,2]);
 
                     temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
                         MR(ind2,ind2,l2+1,2)), CG_n),[1,2]);
                     
                     temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(Fold(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
                         MR(ind2,ind2,l2+1,3)), CG_n),[1,2]);
                 end
             end
@@ -382,10 +419,12 @@ for l = 0:lmax
 end
 
 c = 2*pi*1i*[0:Bx-1,0,-Bx+1:-1]/L;
-dF1 = dF1 - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]) - ...
+dF = dF - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]) - ...
     temp3.*permute(c,[1,3,4,5,6,2]);
 
-Fnew = gather(Fold+dF1*dt);
+clear temp1 temp2 temp3
+
+dF = gather(dF);
 
 end
 

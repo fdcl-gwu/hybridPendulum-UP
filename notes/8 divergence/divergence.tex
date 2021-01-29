@@ -1,0 +1,58 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\begin{document}
+
+The equation of motion for the 3D pendulum is
+\begin{align*}
+	\dot{R} &= R\hat{\Omega}, \\
+	\dot{\Omega} &= -J^{-1} \left( \Omega\times J\Omega + mg\rho\times R^Te_3 \right).
+\end{align*}
+Let $p(R,\Omega,t)$ denote the probability density of $(R,\Omega)$ at time $t$.
+Then the Fokker-Planck equation of $p$ is
+\begin{align} \label{eqn:FP}
+	\frac{\partial p(R,\Omega,t)}{\partial t} &= -\sum_{i=1}^{3}\liediff_i [\Omega_ip(R,\Omega,t)] + \sum_{i=1}^3 \frac{\partial \Big[ \big(J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3)\big)_i p(R,\Omega,t) \Big]}{\partial \Omega_i} \\
+	&= -\sum_{i=1}^2 \Omega_i \liediff_ip(R,\Omega,t) + \left( \sum_{i=1}^3 \frac{\partial \big[J^{-1}(\Omega\times J\Omega)\big]_i}{\partial \Omega_i} \right)p(R,\Omega,t) \nonumber \\
+	&\qquad + \sum_{i=1}^3 \left( \big(J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3)\big)_i \frac{\partial p(R,\Omega,t)}{\partial \Omega_i} \right). \nonumber
+\end{align}
+By direct calculation (this is equivalent to $\mathrm{div}X = 0$), it can be shown that
+\begin{align*}
+	\sum_{i=1}^3 \frac{\partial \big[J^{-1}(\Omega\times J\Omega)\big]_i}{\partial \Omega_i} = 0.
+\end{align*}
+Thus the Fokker-Planck equation can be simplified as
+\begin{align} \label{eqn:FP2}
+	\frac{\partial p(R,\Omega,t)}{\partial t} = -\sum_{i=1}^2 \Omega_i \liediff_ip(R,\Omega,t) + \sum_{i=1}^3 \left( \big(J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3)\big)_i \frac{\partial p(R,\Omega,t)}{\partial \Omega_i} \right).
+\end{align}
+Note that this equation is actually
+\begin{align*}
+	\frac{\diff{p(R,\Omega,t)}}{\diff{t}} = \frac{\partial p(R,\Omega,t)}{\partial t} + \mathcal{L}_X p(R,\Omega,t) = 0,
+\end{align*}
+where $X = \sum_{i=1}^3 \left( \Omega_i\liediff_i - \big[ J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3) \big]_i \partial/\partial\Omega_i \right)$ is the vector field given by the equation of motion written in local coordinates, such that any trajectory of $(R,\Omega)$ is an integral curve of $X$.
+
+Unfortunately, compared with \eqref{eqn:FP}, \eqref{eqn:FP2} does not improve computational efficiency.
+Their only difference is whether apply derivative before or after taking product.
+When calculating the Fourier coefficient, this dose not change the amount of computation, but only the sequence.
+
+\end{document}
+
