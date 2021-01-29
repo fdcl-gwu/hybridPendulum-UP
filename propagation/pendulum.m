@@ -218,7 +218,7 @@ for nt = 1:Nt-1
     
     % propagating Fourier coefficients
     if use_mex
-        F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG);
+        F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG,method);
     else
         F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method);
     end
