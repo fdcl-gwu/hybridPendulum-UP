@@ -36,8 +36,8 @@ m = 10;
 g = 3;
 
 % band limit
-BR = 5;
-Bx = 5;
+BR = 10;
+Bx = 10;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -472,8 +472,9 @@ try
     EvR = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
     EvRvR = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
         permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
-    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
-        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/Bx)^3;
+    
+    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(w,[1,3,4,2]).*permute(f,[7,8,1,2,3,4,5,6]),[3,4,5]);
+    ExvR = sum(permute(x,[1,5,6,7,8,2,3,4]).*ExvR,[6,7,8])*(L/2/Bx)^3;
 
     covxx = Varx;
     covxvR = ExvR-Ex*EvR.';
