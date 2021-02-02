@@ -75,6 +75,9 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     // calculate dF //
     //////////////////
 
+    // if the problem is too large, split arrays
+    bool issmall = (size_F.BR<=10 && size_F.Bx<=10);
+
     // set up arrays
     cuDoubleComplex* dF1;
     cuDoubleComplex* dF2;
@@ -82,131 +85,338 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cuDoubleComplex* dF4;
 
     cuDoubleComplex* Fold_dev;
-    cudaErrorHandle(cudaMalloc(&Fold_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
-    cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-    // set up blocksize and gridsize
-    dim3 blocksize_512_nTot(512, 1, 1);
-    dim3 gridsize_512_nTot((int)size_F.nTot_compact/512+1, 1, 1);
+    if (issmall) {
+        // set up arrays
+        cudaErrorHandle(cudaMalloc(&Fold_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+        cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-    // calculate
-    // dF1
-    dF1 = new cuDoubleComplex[size_F.nTot_compact];
-    get_dF(dF1, Fold_compact, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+        // set up blocksize and gridsize
+        dim3 blocksize_512_nTot(512, 1, 1);
+        dim3 gridsize_512_nTot((int)size_F.nTot_compact/512+1, 1, 1);
 
-    if (stricmp(method,"midpoint") == 0 || stricmp(method,"runge-kutta") == 0) {
-        // dF2
-        cuDoubleComplex* F2_dev;
-        cudaErrorHandle(cudaMalloc(&F2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+        // calculate
+        // dF1
+        dF1 = new cuDoubleComplex[size_F.nTot_compact];
+        get_dF_small(dF1, Fold_compact, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
 
-        cuDoubleComplex* dF1_dev;
-        cudaErrorHandle(cudaMalloc(&dF1_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
-        cudaErrorHandle(cudaMemcpy(dF1_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+        if (stricmp(method,"midpoint") == 0 || stricmp(method,"runge-kutta") == 0) {
+            // dF2
+            cuDoubleComplex* F2_dev;
+            cudaErrorHandle(cudaMalloc(&F2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
 
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F2_dev, Fold_dev, dF1_dev, dt[0]/2, size_F_dev);
+            cuDoubleComplex* dF1_dev;
+            cudaErrorHandle(cudaMalloc(&dF1_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+            cudaErrorHandle(cudaMemcpy(dF1_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-        cuDoubleComplex* F2 = new cuDoubleComplex[size_F.nTot_compact];
-        cudaErrorHandle(cudaMemcpy(F2, F2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F2_dev, Fold_dev, dF1_dev, dt[0]/2, size_F.nTot_compact);
 
-        dF2 = new cuDoubleComplex[size_F.nTot_compact];
-        get_dF(dF2, F2, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            cuDoubleComplex* F2 = new cuDoubleComplex[size_F.nTot_compact];
+            cudaErrorHandle(cudaMemcpy(F2, F2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
 
-        delete[] F2;
-        cudaErrorHandle(cudaFree(F2_dev));
-        cudaErrorHandle(cudaFree(dF1_dev));
-    }
+            dF2 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_small(dF2, F2, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+
+            delete[] F2;
+            cudaErrorHandle(cudaFree(F2_dev));
+            cudaErrorHandle(cudaFree(dF1_dev));
+        }
+
+        if (stricmp(method,"runge-kutta") == 0) {
+            // dF3
+            cuDoubleComplex* F3_dev;
+            cudaErrorHandle(cudaMalloc(&F3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+
+            cuDoubleComplex* dF2_dev;
+            cudaErrorHandle(cudaMalloc(&dF2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+            cudaErrorHandle(cudaMemcpy(dF2_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F3_dev, Fold_dev, dF2_dev, dt[0]/2, size_F.nTot_compact);
+
+            cuDoubleComplex* F3 = new cuDoubleComplex[size_F.nTot_compact];
+            cudaErrorHandle(cudaMemcpy(F3, F3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+
+            dF3 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_small(dF3, F3, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+
+            delete[] F3;
+            cudaErrorHandle(cudaFree(F3_dev));
+            cudaErrorHandle(cudaFree(dF2_dev));
+
+            // dF4
+            cuDoubleComplex* F4_dev;
+            cudaErrorHandle(cudaMalloc(&F4_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+
+            cuDoubleComplex* dF3_dev;
+            cudaErrorHandle(cudaMalloc(&dF3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+            cudaErrorHandle(cudaMemcpy(dF3_dev, dF3, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F4_dev, Fold_dev, dF3_dev, dt[0], size_F.nTot_compact);
+
+            cuDoubleComplex* F4 = new cuDoubleComplex[size_F.nTot_compact];
+            cudaErrorHandle(cudaMemcpy(F4, F4_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+
+            dF4 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_small(dF4, F4, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+
+            delete[] F4;
+            cudaErrorHandle(cudaFree(F4_dev));
+            cudaErrorHandle(cudaFree(dF3_dev));
+        }
+    } else {
+        // set up arrays
+        cudaErrorHandle(cudaMalloc(&Fold_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
+
+        // set up blocksize and gridsize
+        dim3 blocksize_512_nTot(512, 1, 1);
+        dim3 gridsize_512_nTot((int)size_F.nTot_splitx/512+1, 1, 1);
     
-    if (stricmp(method,"runge-kutta") == 0) {
-        // dF3
-        cuDoubleComplex* F3_dev;
-        cudaErrorHandle(cudaMalloc(&F3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+        // calculate
+        // dF1
+        dF1 = new cuDoubleComplex[size_F.nTot_compact];
+        get_dF_large(dF1, Fold_compact, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
 
-        cuDoubleComplex* dF2_dev;
-        cudaErrorHandle(cudaMalloc(&dF2_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
-        cudaErrorHandle(cudaMemcpy(dF2_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+        if (stricmp(method,"midpoint") == 0 || stricmp(method,"runge-kutta") == 0) {
+            // dF2
+            cuDoubleComplex* F2_dev;
+            cudaErrorHandle(cudaMalloc(&F2_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
 
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F3_dev, Fold_dev, dF2_dev, dt[0]/2, size_F_dev);
+            cuDoubleComplex* dF1_dev;
+            cudaErrorHandle(cudaMalloc(&dF1_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
 
-        cuDoubleComplex* F3 = new cuDoubleComplex[size_F.nTot_compact];
-        cudaErrorHandle(cudaMemcpy(F3, F3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            cuDoubleComplex* F2 = new cuDoubleComplex[size_F.nTot_compact];
 
-        dF3 = new cuDoubleComplex[size_F.nTot_compact];
-        get_dF(dF3, F3, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF1_dev, dF1+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-        delete[] F3;
-        cudaErrorHandle(cudaFree(F3_dev));
-        cudaErrorHandle(cudaFree(dF2_dev));
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F2_dev, Fold_dev, dF1_dev, dt[0]/2, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
 
-        // dF4
-        cuDoubleComplex* F4_dev;
-        cudaErrorHandle(cudaMalloc(&F4_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+                cudaErrorHandle(cudaMemcpy(F2+ind_F, F2_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
 
-        cuDoubleComplex* dF3_dev;
-        cudaErrorHandle(cudaMalloc(&dF3_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
-        cudaErrorHandle(cudaMemcpy(dF3_dev, dF3, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            dF2 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_large(dF2, F2, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
 
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F4_dev, Fold_dev, dF3_dev, dt[0], size_F_dev);
+            delete[] F2;
+            cudaErrorHandle(cudaFree(F2_dev));
+            cudaErrorHandle(cudaFree(dF1_dev));
+        }
 
-        cuDoubleComplex* F4 = new cuDoubleComplex[size_F.nTot_compact];
-        cudaErrorHandle(cudaMemcpy(F4, F4_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+        if (stricmp(method,"runge-kutta") == 0) {
+            // dF3
+            cuDoubleComplex* F3_dev;
+            cudaErrorHandle(cudaMalloc(&F3_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
 
-        dF4 = new cuDoubleComplex[size_F.nTot_compact];
-        get_dF(dF4, F4, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            cuDoubleComplex* dF2_dev;
+            cudaErrorHandle(cudaMalloc(&dF2_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
 
-        delete[] F4;
-        cudaErrorHandle(cudaFree(F4_dev));
-        cudaErrorHandle(cudaFree(dF3_dev));
+            cuDoubleComplex* F3 = new cuDoubleComplex[size_F.nTot_compact];
+
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF2_dev, dF2+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F3_dev, Fold_dev, dF2_dev, dt[0]/2, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(F3+ind_F, F3_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            dF3 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_large(dF3, F3, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+
+            delete[] F3;
+            cudaErrorHandle(cudaFree(F3_dev));
+            cudaErrorHandle(cudaFree(dF2_dev));
+
+            // dF4
+            cuDoubleComplex* F4_dev;
+            cudaErrorHandle(cudaMalloc(&F4_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
+
+            cuDoubleComplex* dF3_dev;
+            cudaErrorHandle(cudaMalloc(&dF3_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
+
+            cuDoubleComplex* F4 = new cuDoubleComplex[size_F.nTot_compact];
+
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF3_dev, dF3+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (F4_dev, Fold_dev, dF3_dev, dt[0], size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(F4+ind_F, F4_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            dF4 = new cuDoubleComplex[size_F.nTot_compact];
+            get_dF_large(dF4, F4, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+
+            delete[] F4;
+            cudaErrorHandle(cudaFree(F4_dev));
+            cudaErrorHandle(cudaFree(dF3_dev));
+        }
     }
+
+    // free memory
+    delete[] MR_compact;
+    delete[] u_compact;
+    delete[] CG;
 
     ///////////////
     // integrate //
     ///////////////
 
-    // Fnew = Fold + dt*dF
+    // Fnew = Fold + dt*dF1 (euler)
+    // Fnew = Fold + dt*dF2 (midpoint)
+    // Fnew = Fold + dt/3*dF1 + dt/6*dF2 + dt/6*dF3 + dt/3*dF4 (runge-kutta)
 
-    // set up arrays
+    // set up GPU arrays
     cuDoubleComplex* Fnew_dev;
-    cudaErrorHandle(cudaMalloc(&Fnew_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
-
     cuDoubleComplex* dF_dev;
-    cudaErrorHandle(cudaMalloc(&dF_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
 
     // calculate
-    if (stricmp(method,"euler") == 0) {
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F_dev);
+    if (issmall) {
+        // set up arrays
+        cudaErrorHandle(cudaMalloc(&Fnew_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
+        cudaErrorHandle(cudaMalloc(&dF_dev, size_F.nTot_compact*sizeof(cuDoubleComplex)));
 
-        delete[] dF1;
-    } else if (stricmp(method,"midpoint") == 0) {
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F_dev);
+        // set up blocksize and gridsize
+        dim3 blocksize_512_nTot(512, 1, 1);
+        dim3 gridsize_512_nTot((int)size_F.nTot_compact/512+1, 1, 1);
 
-        delete[] dF1;
-        delete[] dF2;
-    } else if (stricmp(method,"runge-kutta") == 0) {
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/6, size_F_dev);
+        // calculate
+        if (stricmp(method,"euler") == 0) {
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_compact);
 
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/3, size_F_dev);
+            delete[] dF1;
+        } else if (stricmp(method,"midpoint") == 0) {
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_compact);
 
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF3, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/3, size_F_dev);
+            delete[] dF1;
+            delete[] dF2;
+        } else if (stricmp(method,"runge-kutta") == 0) {
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/6, size_F.nTot_compact);
 
-        cudaErrorHandle(cudaMemcpy(dF_dev, dF4, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
-        integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/6, size_F_dev);
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF2, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/3, size_F.nTot_compact);
 
-        delete[] dF1;
-        delete[] dF2;
-        delete[] dF3;
-        delete[] dF4;
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF3, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/3, size_F.nTot_compact);
+
+            cudaErrorHandle(cudaMemcpy(dF_dev, dF4, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+            integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fnew_dev, dF_dev, dt[0]/6, size_F.nTot_compact);
+
+            delete[] dF1;
+            delete[] dF2;
+            delete[] dF3;
+            delete[] dF4;
+        } else {
+            mexPrintf("'method' must be 'euler', 'midpoint', or 'runge-kutta'. Return Fold.\n");
+            Fnew_dev = Fold_dev;
+        }
+
+        cudaErrorHandle(cudaMemcpy(Fnew_compact, Fnew_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
     } else {
-        mexPrintf("'method' must be 'euler', 'midpoint', or 'runge-kutta'. Return Fold.\n");
-        Fnew_dev = Fold_dev;
+        // set up arrays
+        cudaErrorHandle(cudaMalloc(&Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
+        cudaErrorHandle(cudaMalloc(&dF_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex)));
+
+        // set up blocksize and gridsize
+        dim3 blocksize_512_nTot(512, 1, 1);
+        dim3 gridsize_512_nTot((int)size_F.nTot_splitx/512+1, 1, 1);
+
+        // calculate
+        if (stricmp(method,"euler") == 0) {
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF1+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            delete[] dF1;
+        } else if (stricmp(method,"midpoint") == 0) {
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF2+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            delete[] dF1;
+            delete[] dF2;
+        } else if (stricmp(method,"runge-kutta") == 0) {
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fold_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF1+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/6, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fnew_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF2+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/3, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fnew_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF3+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/3, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            for (int k = 0; k < size_F.const_2Bx; k++) {
+                int ind_F = k*size_F.nTot_splitx;
+                cudaErrorHandle(cudaMemcpy(Fold_dev, Fnew_compact+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+                cudaErrorHandle(cudaMemcpy(dF_dev, dF4+ind_F, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+                integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/6, size_F.nTot_splitx);
+                cudaErrorHandle(cudaGetLastError());
+
+                cudaErrorHandle(cudaMemcpy(Fnew_compact+ind_F, Fnew_dev, size_F.nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+            }
+
+            delete[] dF1;
+            delete[] dF2;
+            delete[] dF3;
+            delete[] dF4;
+        } else {
+            mexPrintf("'method' must be 'euler', 'midpoint', or 'runge-kutta'. Return Fold.\n");
+            Fnew_dev = Fold_dev;
+        }
     }
 
     // gather Fnew
-    cudaErrorHandle(cudaMemcpy(Fnew_compact, Fnew_dev, size_F.nTot_compact*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
     modify_F(Fnew_compact, Fnew, false, &size_F);
 
     // free memory
@@ -217,8 +427,5 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
     delete[] Fold_compact;
     delete[] Fnew_compact;
-    delete[] MR_compact;
-    delete[] u_compact;
-    delete[] CG;
 }
 

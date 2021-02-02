@@ -35,6 +35,15 @@ The dynamical model for a hinged 3D pendulum is
 	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + H\diff{W}_t,
 \end{align*}
 where $J\in\real^{3\times 3}$ is the moment of inertia matrix, $\rho$ is the vector from the pivot point to the center of mass expressed in the body-fixed frame.
+The Fokker-Planck equation is
+\begin{align*}
+	\frac{\partial p(R,\Omega,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i (\Omega_ip(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3)_i p(R,\Omega,t)\right] + \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 p(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
+\end{align*}
+Let $F^l_{m,n,i,j,k}[p]$ be the Fourier coefficient of the probability density, then it satisfies the following ordinary different equation
+\begin{align*}
+	\frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} = &-\sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha (\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3)_\alpha p] \right] \\
+	&+ \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^l_{m,n,i,j,k}\left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right].
+\end{align*}
 
 \end{document}
 

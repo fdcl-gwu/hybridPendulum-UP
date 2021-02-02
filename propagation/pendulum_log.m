@@ -1,4 +1,4 @@
-function [ stat, MFG ] = pendulum( use_mex, method, path )
+function [ stat, MFG ] = pendulum_log( use_mex, path )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -6,10 +6,6 @@ addpath('..');
 
 if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
-end
-
-if ~exist('method','var') || isempty(method)
-    method = 'euler';
 end
 
 if exist('path','var') && ~isempty(path)
@@ -142,17 +138,17 @@ else
 end
 
 for i = 1:3
-    F1 = gpuArray.zeros(2*BR,2*BR,2*BR);
+    G1 = gpuArray.zeros(2*BR,2*BR,2*BR);
     for k = 1:2*BR
-        F1(:,k,:) = fftn(mR(i,:,k,:));
+        G1(:,k,:) = fftn(mR(i,:,k,:));
     end
-    F1 = fftshift(fftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
+    G1 = fftshift(fftshift(G1,1),3);
+    G1 = flip(flip(G1,1),3);
 
     for l = 0:lmax
         for m = -l:l
             for n = -l:l
-                MR(m+lmax+1,n+lmax+1,l+1,i) = sum(w.*F1(m+lmax+1,:,n+lmax+1).*...
+                MR(m+lmax+1,n+lmax+1,l+1,i) = sum(w.*G1(m+lmax+1,:,n+lmax+1).*...
                     permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]));
             end
         end
@@ -195,22 +191,23 @@ EvRvR = zeros(3,3,Nt);
     U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f,R,x,w);
 
 %% propagation
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+g = log(f);
+G = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for nt = 1:Nt-1
     tic;
     
     % forward
-    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+    G1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
     for k = 1:2*BR
-        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
+        G1(:,k,:,:,:,:) = fftn(g(:,k,:,:,:,:));
     end
-    F1 = fftshift(fftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
+    G1 = fftshift(fftshift(G1,1),3);
+    G1 = flip(flip(G1,1),3);
     
     for l = 0:lmax
         for m = -l:l
             for n = -l:l
-                F(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                G(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*G1(m+lmax+1,:,n+lmax+1,:,:,:).*...
                     permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
             end
         end
@@ -218,33 +215,38 @@ for nt = 1:Nt-1
     
     % propagating Fourier coefficients
     if use_mex
-        F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG,method);
+        G = pendulum_propagate(G,X,OJO,MR,1/sf,L,u,CG);
     else
-        F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method);
+        G = integrate(G,X,OJO,MR,1/sf,L,u,CG);
     end
     
     % backward
-    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
+    G1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
-            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
+            F_mn = G(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
 
             for k = 1:2*BR
                 d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
-                F1(m+lmax+1,k,n+lmax+1,:,:,:) = sum((2*permute(lmin:lmax,...
+                G1(m+lmax+1,k,n+lmax+1,:,:,:) = sum((2*permute(lmin:lmax,...
                     [1,3,2])+1).*F_mn.*d_jk_betak,3);
             end
         end
     end
 
-    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
-    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
-    F1 = ifftshift(ifftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
+    G1 = cat(1,G1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
+    G1 = cat(3,G1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
+    G1 = ifftshift(ifftshift(G1,1),3);
+    G1 = flip(flip(G1,1),3);
     for k = 1:2*BR
-        f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
+        g(:,k,:,:,:,:) = ifftn(G1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
     end
+    
+    % normalize
+    f = exp(g);
+    f = f/(sum(f.*w,'all')*(L/2/Bx)^3);
+    % g = log(f);
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
@@ -285,54 +287,29 @@ end
 end
 
 
-function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG, method )
+function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG )
 
-u = gpuArray(u);
-dF1 = derivative(gpuArray(Fold),X,OJO,MR,L,u,CG);
-
-if strcmpi(method,'euler')
-    Fnew = gather(Fold+dt*dF1);
-    return;
-end
-
-% midpoint method
-F2 = Fold+dF1*dt/2;
-dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG);
-
-if strcmpi(method,'midpoint')
-    Fnew = Fold+dt*dF2;
-    return;
-end
-
-% Runge-Kutta method
-F3 = Fold + dF2*dt/2;
-dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG);
-
-F4 = Fold + dF3*dt;
-dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG);
-
-if strcmpi(method,'runge-kutta')
-    Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
-    return;
-end
-
-error('''method'' must be one of ''euler'',''midpoint'', or ''Runge-Kutta''');
-
-end
-
-
-function [ dF ] = derivative( F, X, OJO, MR, L, u, CG )
-
-BR = size(F,3);
-Bx = size(F,4)/2;
+BR = size(Fold,3);
+Bx = size(Fold,4)/2;
 lmax = BR-1;
 
-dF = gpuArray.zeros(size(F));
+Fold = gpuArray(Fold);
+u = gpuArray(u);
+
+dF1 = gpuArray.zeros(size(Fold));
 
 % Omega hat
-temp1 = gpuArray.zeros(size(dF));
-temp2 = gpuArray.zeros(size(dF));
-temp3 = gpuArray.zeros(size(dF));
+temp1 = gpuArray.zeros(size(dF1));
+temp2 = gpuArray.zeros(size(dF1));
+temp3 = gpuArray.zeros(size(dF1));
+
+for l = 0:lmax
+    indmn = -l+lmax+1:l+lmax+1;
+    temp1(indmn,indmn,l+1,:,:,:) = pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,1).');
+    temp2(indmn,indmn,l+1,:,:,:) = pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,2).');
+    temp3(indmn,indmn,l+1,:,:,:) = pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
+end
+
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
@@ -342,24 +319,26 @@ for ix = 1:2*Bx
             X_ijk = circshift(X_ijk,kx,3);
             X_ijk = permute(X_ijk,[5,6,7,1,2,3,4]);
             
-            temp1(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,1).*F,[4,5,6])/(2*Bx)^3;
-            temp2(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,2).*F,[4,5,6])/(2*Bx)^3;
-            temp3(:,:,:,ix,jx,kx) = sum(X_ijk(:,:,:,:,:,:,3).*F,[4,5,6])/(2*Bx)^3;
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(X_ijk(:,:,:,:,:,:,1).*temp1,[4,5,6])/(2*Bx)^3;
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(X_ijk(:,:,:,:,:,:,2).*temp2,[4,5,6])/(2*Bx)^3;
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(X_ijk(:,:,:,:,:,:,3).*temp3,[4,5,6])/(2*Bx)^3;
         end
     end
-end
-
-for l = 0:lmax
-    indmn = -l+lmax+1:l+lmax+1;
-    dF(indmn,indmn,l+1,:,:,:) = dF(indmn,indmn,l+1,:,:,:)-...
-        pagefun(@mtimes,temp1(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,1).')-...
-        pagefun(@mtimes,temp2(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,2).')-...
-        pagefun(@mtimes,temp3(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
 end
 
 clear temp1 temp2 temp3
 
 % cross(Omega,J*Omega)
+c = 2*pi*1i*[0:Bx-1,0,-Bx+1:-1]/L;
+
+dF1 = dF1 - permute(OJO(:,:,:,1),[4,5,6,1,2,3]).*permute(c,[1,3,4,2])...
+          - permute(OJO(:,:,:,2),[4,5,6,1,2,3]).*permute(c,[1,3,4,5,2])...
+          - permute(OJO(:,:,:,3),[4,5,6,1,2,3]).*permute(c,[1,3,4,5,6,2]);
+      
+temp1 = Fold.*permute(c,[1,3,4,2]);
+temp2 = Fold.*permute(c,[1,3,4,5,2]);
+temp3 = Fold.*permute(c,[1,3,4,5,6,2]);
+
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
@@ -369,79 +348,58 @@ for ix = 1:2*Bx
             OJO_ijk = circshift(OJO_ijk,kx,3);
             OJO_ijk = permute(OJO_ijk,[5,6,7,1,2,3,4]);
             
-            temp1 = sum(OJO_ijk(:,:,:,:,:,:,1).*F,[4,5,6])/(2*Bx)^3;
-            temp2 = sum(OJO_ijk(:,:,:,:,:,:,2).*F,[4,5,6])/(2*Bx)^3;
-            temp3 = sum(OJO_ijk(:,:,:,:,:,:,3).*F,[4,5,6])/(2*Bx)^3;
-            
-            dF(:,:,:,ix,jx,kx) = dF(:,:,:,ix,jx,kx)-...
-                temp1*deriv_x(ix,Bx,L)-temp2*deriv_x(jx,Bx,L)-temp3*deriv_x(kx,Bx,L);
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(OJO_ijk(:,:,:,:,:,:,1).*temp1,[4,5,6])/(2*Bx)^3;
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(OJO_ijk(:,:,:,:,:,:,2).*temp2,[4,5,6])/(2*Bx)^3;
+            dF1(:,:,:,ix,jx,kx) = dF1(:,:,:,ix,jx,kx) - sum(OJO_ijk(:,:,:,:,:,:,3).*temp3,[4,5,6])/(2*Bx)^3;
         end
     end
 end
 
-clear temp1 temp2 temp3
-
 % -mg*cross(rho,R'*e3)
-temp1 = gpuArray.zeros(size(F));
-temp2 = gpuArray.zeros(size(F));
-temp3 = gpuArray.zeros(size(F));
+temp1 = gather(temp1);
+temp2 = gather(temp2);
+temp3 = gather(temp3);
+
 for l = 0:lmax
+    ind = -l+lmax+1:l+lmax+1;
     for l2 = 0:lmax
         ind2 = -l2+lmax+1:l2+lmax+1;
         l1_all = find(l>=abs((0:lmax)-l2) & l<=(0:lmax)+l2)-1;
         for l1 = l1_all
             cl = (2*l1+1)*(2*l2+1)/(2*l+1);
-            col = l^2-(l1-l2)^2;
+            col = l^2-(l1-l2)^2+1 : l^2-(l1-l2)^2+2*l+1;
             ind1 = -l1+lmax+1:l1+lmax+1;
-            
-            for m = -l:l
-                col_m = col+m+l+1;
-                CG_m = reshape(CG{l1+1,l2+1}(:,col_m),2*l2+1,2*l1+1);
-                for n = -l:l
-                    col_n = col+n+l+1;
-                    CG_n = reshape(CG{l1+1,l2+1}(:,col_n),2*l2+1,2*l1+1);
-                    
-                    temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,1)), CG_n),[1,2]);
-
-                    temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,2)), CG_n),[1,2]);
-                    
-                    temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,3)), CG_n),[1,2]);
-                end
+            for ix = 1:2*Bx
+                kron_FMR1 = reshape(permute(temp1(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
+                    permute(MR(ind2,ind2,l2+1,1),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
+                kron_FMR2 = reshape(permute(temp2(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
+                    permute(MR(ind2,ind2,l2+1,2),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
+                kron_FMR3 = reshape(permute(temp3(ind1,ind1,l1+1,:,:,ix),[3,1,6,2,4,5]).*...
+                    permute(MR(ind2,ind2,l2+1,3),[1,3,2,4]),[(2*l1+1)*(2*l2+1),(2*l1+1)*(2*l2+1),2*Bx,2*Bx]);
+                
+                kron_FMR1_gpu = gpuArray(kron_FMR1);
+                dF1(ind,ind,l+1,:,:,ix) = dF1(ind,ind,l+1,:,:,ix) - ...
+                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
+                    pagefun(@mtimes,kron_FMR1_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
+                clear kron_FMR1_gpu;
+                
+                kron_FMR2_gpu = gpuArray(kron_FMR2);
+                dF1(ind,ind,l+1,:,:,ix) = dF1(ind,ind,l+1,:,:,ix) - ...
+                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
+                    pagefun(@mtimes,kron_FMR2_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
+                clear kron_FMR2_gpu;
+                
+                kron_FMR3_gpu = gpuArray(kron_FMR3);
+                dF1(ind,ind,l+1,:,:,ix) = dF1(ind,ind,l+1,:,:,ix) - ...
+                    permute(gather(cl*pagefun(@mtimes,CG{l1+1,l2+1}(:,col).',...
+                    pagefun(@mtimes,kron_FMR3_gpu,CG{l1+1,l2+1}(:,col)))),[1,2,5,3,4]);
+                clear kron_FMR3_gpu;
             end
         end
     end
 end
 
-c = 2*pi*1i*[0:Bx-1,0,-Bx+1:-1]/L;
-dF = dF - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]) - ...
-    temp3.*permute(c,[1,3,4,5,6,2]);
-
-clear temp1 temp2 temp3
-
-dF = gather(dF);
-
-end
-
-
-function [ c ] = deriv_x( n, B, L )
-
-n = n-1;
-
-if n < B
-    c = 2*pi*1i*n/L;
-elseif n == B
-    c = 0;
-elseif n > B && n < 2*B
-    c = 2*pi*1i*(n-2*B)/L;
-else
-    error('n out of range');
-end
+Fnew = gather(Fold+dF1*dt);
 
 end
 
@@ -472,9 +430,8 @@ try
     EvR = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
     EvRvR = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
         permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
-    
-    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(w,[1,3,4,2]).*permute(f,[7,8,1,2,3,4,5,6]),[3,4,5]);
-    ExvR = sum(permute(x,[1,5,6,7,8,2,3,4]).*ExvR,[6,7,8])*(L/2/Bx)^3;
+    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
+        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/Bx)^3;
 
     covxx = Varx;
     covxvR = ExvR-Ex*EvR.';

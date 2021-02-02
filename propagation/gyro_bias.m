@@ -1,13 +1,9 @@
-function [ f, stat, MFG ] = gyro_bias( isreal, use_mex )
+function [ f, stat, MFG ] = gyro_bias( use_mex )
 close all;
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
 addpath('..');
-
-if ~exist('isreal','var') || isempty(isreal)
-    isreal = false;
-end
 
 if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
@@ -76,7 +72,7 @@ for j = 1:2*BR
 end
 
 % derivatives
-u = getu(lmax,isreal);
+u = getu(lmax);
 if ~use_mex
     u = gpuArray(u);
 end

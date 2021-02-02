@@ -42,10 +42,8 @@ __host__ void cudaErrorHandle(const cudaError_t& err);
 __host__ void cutensorErrorHandle(const cutensorStatus_t& err);
 __host__ void cublasErrorHandle(const cublasStatus_t& err);
 
-__host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
+__host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
 	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const bool issmall, const Size_F* size_F);
-__host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, const bool issmall, const Size_F* size_F);
 
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx);
 

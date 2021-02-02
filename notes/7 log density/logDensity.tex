@@ -39,7 +39,63 @@ Suppose $f>0$ and let $f = e^g$, then we have:
 \end{align*}
 So $g$ satisfies the following partial differential equation:
 \begin{align*}
-	\frac{\partial g}{\partial t} = \sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right)
+	\frac{\partial g}{\partial t} = -\sum_{i=1}^n \left( \frac{\partial \mu_i}{\partial x_i} + \mu_i \frac{\partial g}{\partial x_i} \right) + \sum_{i,j=1}^n \left( D_{ij}\left( \frac{\partial^2 g}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial g}{\partial x_j} \right) + \frac{\partial^2 D_{ij}}{\partial x_i \partial x_j} + \frac{\partial g}{\partial x_i} \frac{\partial D_{ij}}{\partial x_j} + \frac{\partial D_{ij}}{\partial x_i} \frac{\partial g}{\partial x_j} \right)
+\end{align*}
+
+\section{Attitude Dependent Angular velocity}
+The Fokker-Planck equation for the attitude of a rigid body is
+\begin{align*}
+	\frac{\partial f(R,t)}{\partial t} = -\sum_{i=1}^n \liediff_i(\Omega(R)_if(R,t)) + \sum_{i,j=1}^3 G_{ij}\liediff_i\liediff_j p(R,t).
+\end{align*}
+Let $f=e^g$, then $g$ satisfies the following partial differential equation
+\begin{align*}
+	\frac{\partial g(R,t)}{\partial t} = -\sum_{i=1}^3 \liediff_i\Omega_i(R) - \sum_{i=1}^3 \Omega_i(R)\liediff_ig(R,t) + \sum_{i,j=1}^3 G_{ij}\left(\liediff_i\liediff_j g(R,x,t) + \liediff_ig(R,x,t)\liediff_jg(R,x,t)\right)
+\end{align*}
+
+To solve this ordinary differential equation, let $g(R,t) = \sum_{l=0}^{B-1}\sum_{m,n=-l}^{l} \mathcal{F}^l_{m,n}[g](t)$, then we have
+\begin{align*}
+	\frac{\diff{\mathcal{F}^l[g]}}{\diff{t}} = -\sum_{i=1}^3\mathcal{F}^l[\Omega_i\liediff_ig] + \sum_{i,j=1}^3 G_{ij}\mathcal{F}^l[\liediff_i\liediff_jg + \liediff_ig\liediff_jg] - \sum_{i=1}^3\mathcal{F}^l[\liediff_i\Omega_i].
+\end{align*}
+Let $C_{l_1,l_2,l}\in\real^{(2l_1+1)(2l_2+1) \times (2l+1)}$ be equally split into $2l_1+1$ rows, and denote the $(\alpha+l_1+1)$-th piece by $C_{l_1,l_2,l,\alpha}\in\real^{(2l_2+1) \times (2l+1)}$ for $\alpha = -l_1, \ldots l_1$.
+Then the first term on the right hand side can be written as 
+\begin{align*}
+	\vect{\mathcal{F}^l[\Omega_i\liediff_ig]} &= \sum_{|l_1-l_2| \leq l \leq l_1+l_2} \frac{(2l_1+1)(2l_2+1)}{2l+1} \vect{C_{l_1,l_2,l}^T \mathcal{F}^{l_1}[\Omega_i] \otimes \mathcal{F}^{l_2}[\liediff_ig] C_{l_1,l_2,l}} \\
+	&= \sum_{|l_1-l_2| \leq l \leq l_1+l_2} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{\alpha, \beta = -l_1}^{l_1} \mathcal{F}^{l_1}_{\alpha,\beta}[\Omega_i] \vect{C_{l_1,l_2,l,\alpha}^T \mathcal{F}^{l_2}[\liediff_ig] C_{l_1,l_2,l,\beta}} \\
+	&= \sum_{|l_1-l_2| \leq l \leq l_1+l_2} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{\alpha, \beta = -l_1}^{l_1} \mathcal{F}^{l_1}_{\alpha,\beta}[\Omega_i] \left( \left(C_{l_1,l_2,l,\beta}^T u_i^{l_2}\right) \otimes C_{l_1,l_2,l,\alpha}^T \right) \vect{\mathcal{F}^{l_2}g} \\
+	&= \sum_{|l_1-l_2| \leq l \leq l_1+l_2} \frac{(2l_1+1)(2l_2+1)}{2l+1} \sum_{\alpha, \beta = -l_1}^{l_1} \mathcal{F}^{l_1}_{\alpha,\beta}[\Omega_i] \left(C_{l_1,l_2,l,\beta}^T \otimes C_{l_1,l_2,l,\alpha}^T\right) \left(u_i^{l_2} \otimes I^{l_2}\right) \vect{\mathcal{F}^{l_2}[g]},
+\end{align*}
+where $I^{l_2} = I_{(2l_2+1)\times(2l_2+1)}$.
+Also the $\mathcal{F}^l[\liediff_i\liediff_jg]$ term can be written as
+\begin{align*}
+	\vect{\mathcal{F}^l[\liediff_i\liediff_jg]} = \vect{\mathcal{F}^l[g](u_j^l)^T(u_i^l)^T} = (u_i^lu_j^l \otimes I^l) \vect{\mathcal{F}^l[g]}.
+\end{align*}
+Finally, the $\mathcal{F}^l[\liediff_ig \liediff_jg]$ term can be written as
+\begin{align*}
+	\vect{\mathcal{F}^l[\liediff_ig \liediff_jg]}
+\end{align*}
+
+\section{Gyroscope with Bias}
+
+The Fokker-Planck equation for a gyroscope with bias is given by
+\begin{align*}
+	\frac{\partial f(R,x,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i((\Omega_i+x_i)p(R,x,t)) + \sum_{i,j=1}^3 G_{1,ij} \liediff_i\liediff_j p(R,x,t) + \sum_{i,j=1}^3 G_{2,ij}\frac{\partial^2 p(R,x,t)}{\partial x_i \partial x_j}.
+\end{align*}
+Let $f=e^g$, then $g$ satisfies the following partial differential equation
+\begin{align*}
+	\frac{\partial g(R,x,t)}{\partial t} = &-3 - \sum_{i=1}^3 (\Omega_i+x_i) \liediff_ig(R,x,t) + \sum_{i,j=1}^3 G_{1,ij}\left(\liediff_i\liediff_j g(R,x,t) + \liediff_ig(R,x,t)\liediff_jg(R,x,t)\right) \\
+	&+ \sum_{i,j=1}^3 G_{2,ij}\left(\frac{\partial^2g(R,x,t)}{\partial x_i \partial x_j} + \frac{\partial g(R,x,t)}{\partial x_i} \frac{\partial g(R,x,t)}{\partial x_j}\right).
+\end{align*}
+
+\section{Pendulum Example}
+
+The Fokker-Planck equation for pendulum is
+\begin{align*}
+	\frac{\partial f(R,\Omega,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i (\Omega_if(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3)_i f(R,\Omega,t)\right] + \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 f(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
+\end{align*}
+Let $f = e^g$, then $g$ satisfies the following partial differential equation
+\begin{align*}
+	\frac{\partial g(R,\Omega,t)}{\partial t} = &-\sum_{i=1}^3 \Omega_i \liediff_ig(R,\Omega,t) + \sum_{i=1}^3 \frac{\partial (\Omega\times J\Omega)_i}{\partial \Omega_i} + \sum_{i=1}^3 (\Omega\times J\Omega + mg\rho\times R^Te_3)_i \frac{\partial g(R,\Omega,t)}{\partial \Omega_i} \\
+	&+ \sum_{i,j=1}^3 G_{ij} \left( \frac{\partial^2 g(R,\Omega,t)}{\partial\Omega_i \partial\Omega_j} + \frac{\partial g(R,\Omega,t)}{\partial\Omega_i} \frac{\partial g(R,\Omega,t)}{\partial\Omega_j}\right).
 \end{align*}
 
 \end{document}
