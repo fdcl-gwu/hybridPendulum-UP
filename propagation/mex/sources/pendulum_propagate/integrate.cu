@@ -36,7 +36,7 @@ __global__ void flip_shift(const cuDoubleComplex* X, cuDoubleComplex* X_ijk, con
 	}
 }
 
-__global__ void addup_F(cuDoubleComplex* dF, Size_F* size_F)
+__global__ void addup_F(cuDoubleComplex* dF, const Size_F* size_F)
 {
 	int ind1 = threadIdx.x + blockIdx.x*blockDim.x;
 	if (ind1 < size_F[0].nTot_splitx) {
@@ -143,7 +143,7 @@ __host__ void modify_F(const cuDoubleComplex* F, cuDoubleComplex* F_modify, bool
 	}
 }
 
-__host__ void permute_F(cuDoubleComplex* F, bool R_first, Size_F* size_F)
+__host__ void permute_F(cuDoubleComplex* F, bool R_first, const Size_F* size_F)
 {
 	cuDoubleComplex* Fp = new cuDoubleComplex[size_F->nTot_compact];
 	if (R_first) {
@@ -205,175 +205,435 @@ __host__ void deriv_x(double* c, const int n, const int B, const double L)
 		*c = 2*PI*(n-2*B)/L;
 }
 
-__host__ void get_blocksize(dim3* gridsize, dim3* blocksize, bool* iswrapped, const int l1, const int l2, const Size_F* size_F)
+__host__ void get_dF(cuDoubleComplex* dF, cuDoubleComplex* F, const cuDoubleComplex* X, const cuDoubleComplex* OJO, const cuDoubleComplex* MR,
+	const double* L, const cuDoubleComplex* u, const double* const* CG, const Size_F* size_F, const Size_F* size_F_dev)
 {
-	if (2*l1+1 <= 32) {
-		blocksize->x = 2*l1+1;
-		blocksize->y = blocksize->x;
+	////////////////////////////
+	// circular_convolution X //
+	////////////////////////////
 
-		gridsize->x = 2*l2+1;
-		gridsize->y = gridsize->x;
-		gridsize->z = size_F->const_2Bx;
+	// X_ijk = flip(flip(flip(X,1),2),3)
+	// X_ijk = circshift(X_ijk,1,i)
+	// X_ijk = circshift(X_ijk,2,j)
+	// X_ijk = circshift(X_ijk,3,k)
+	// dF{r,i,j,k,p} = Fold{r,m,n,l}.*X_ijk{m,n,l,p}
+	// dF(indmn,indmn,l,i,j,k,p) = -dF(indmn,indmn,l,i,j,k,p)*u(indmn,indmn,l,p)'
+	// dF = sum(dF,'p')
 
-		*iswrapped = false;
-	} else {
-		blocksize->x = 32;
-		blocksize->y = 32;
+	// set up GPU arrays
+	cuDoubleComplex* F_dev;
+	cudaErrorHandle(cudaMalloc(&F_dev, size_F->nx*size_F->nR_split * sizeof(cuDoubleComplex)));
 
-		gridsize->x = ((int) l1/32+1)*(2*l2+1);
-		gridsize->y = gridsize->x;
-		gridsize->z = size_F->const_2Bx;
+	cuDoubleComplex* X_dev;
+	cudaErrorHandle(cudaMalloc(&X_dev, 3*size_F->nx*sizeof(cuDoubleComplex)));
+	cudaErrorHandle(cudaMemcpy(X_dev, X, 3*size_F->nx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-		*iswrapped = true;
+	cuDoubleComplex* X_ijk_dev;
+	cudaErrorHandle(cudaMalloc(&X_ijk_dev, 3*size_F->nx*sizeof(cuDoubleComplex)));
+
+	cuDoubleComplex* dF3_dev;
+	cudaErrorHandle(cudaMalloc(&dF3_dev, 3*size_F->nTot_splitx*sizeof(cuDoubleComplex)));
+
+	cuDoubleComplex* u_dev;
+	cudaErrorHandle(cudaMalloc(&u_dev, 3*size_F->nR_compact*sizeof(cuDoubleComplex)));
+	cudaErrorHandle(cudaMemcpy(u_dev, u, 3*size_F->nR_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+	// set up CPU arrays
+	permute_F(F, false, size_F);
+
+	cuDoubleComplex* dF3 = new cuDoubleComplex[3*size_F->nTot_compact];
+
+	// set up cutensor
+	cutensorHandle_t handle_cutensor;
+	cutensorInit(&handle_cutensor);
+
+	cutensorContractionPlan_t plan_conv[2];
+	size_t worksize_conv[2] = {0,0};
+
+	cutensor_initConv(&handle_cutensor, &plan_conv[0], &worksize_conv[0], F_dev, X_ijk_dev, dF3_dev, size_F->nR_split, size_F);
+	cutensor_initConv(&handle_cutensor, &plan_conv[1], &worksize_conv[1], F_dev, X_ijk_dev, dF3_dev, size_F->nR_remainder, size_F);
+
+	void* cutensor_workspace = nullptr;
+	size_t worksize_max = worksize_conv[0]>worksize_conv[1] ? worksize_conv[0] : worksize_conv[1];
+	if (worksize_max > 0) {
+		cudaErrorHandle(cudaMalloc(&cutensor_workspace, worksize_max));
 	}
-}
 
-__host__ void cudaErrorHandle(const cudaError_t& err)
-{
-	if (err != cudaSuccess) {
-		std::cout << "Cuda Error: " << cudaGetErrorString(err) << std::endl;
+	cuDoubleComplex alpha_cutensor = make_cuDoubleComplex(-(double)1/size_F->nx,0);
+	cuDoubleComplex beta_cutensor = make_cuDoubleComplex(0,0);
+
+	// set up cublas
+	cublasHandle_t handle_cublas;
+	cublasCreate(&handle_cublas);
+
+	cuDoubleComplex alpha_cublas = make_cuDoubleComplex(1,0);
+	cuDoubleComplex beta_cublas = make_cuDoubleComplex(0,0);
+
+	// set up blocksize and gridsize
+	dim3 blocksize_8(8, 8, 8);
+	int gridnum_8 = (int)size_F->const_2Bx/8+1;
+	dim3 gridsize_8(gridnum_8, gridnum_8, gridnum_8);
+
+	dim3 blocksize_512_nTot(512, 1, 1);
+	dim3 gridsize_512_nTot((int)size_F->nTot_splitx/512+1, 1, 1);
+
+	// calculate
+	for (int is = 0; is < size_F->ns; is++) {
+		int nR_split;
+		if (is == size_F->ns-1)
+			nR_split = size_F->nR_remainder;
+		else
+			nR_split = size_F->nR_split;
+
+		cudaErrorHandle(cudaMemcpy(F_dev, F+is*size_F->nx*size_F->nR_split, size_F->nx*nR_split*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+		for (int i = 0; i < size_F->const_2Bx; i++) {
+			for (int j = 0; j < size_F->const_2Bx; j++) {
+				for (int k = 0; k < size_F->const_2Bx; k++) {
+					flip_shift <<<gridsize_8, blocksize_8>>> (X_dev, X_ijk_dev, i, j, k, size_F_dev);
+					cudaErrorHandle(cudaGetLastError());
+
+					if (is == size_F->ns-1) {
+						cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv[1], &alpha_cutensor, F_dev, X_ijk_dev,
+							&beta_cutensor, dF3_dev, dF3_dev, cutensor_workspace, worksize_conv[1], 0));
+					} else {
+						cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv[0], &alpha_cutensor, F_dev, X_ijk_dev,
+							&beta_cutensor, dF3_dev, dF3_dev, cutensor_workspace, worksize_conv[0], 0));
+					}
+
+					for (int ip = 0; ip < 3; ip++) {
+						int ind_dF3 = is*size_F->nR_split + (i + j*size_F->const_2Bx + k*size_F->const_2Bxs)*size_F->nR_compact + ip*size_F->nTot_compact;
+						cudaMemcpy(dF3+ind_dF3, dF3_dev+ip*nR_split, nR_split*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+					}
+				}
+			}
+		}
 	}
-}
 
-__host__ void cutensorErrorHandle(const cutensorStatus_t& err)
-{
-	if (err != CUTENSOR_STATUS_SUCCESS) {
-		std::cout << "cuTensor Error: " << cutensorGetErrorString(err) << std::endl;
+	// set up CPU arrays
+	permute_F(F, true, size_F);
+
+	// multiply u
+	for (int k = 0; k < size_F->const_2Bx; k++) {
+		for (int ip = 0; ip < 3; ip++) {
+			int ind_dF3 = k*size_F->nTot_splitx + ip*size_F->nTot_compact;
+			int ind_dF3_dev = ip*size_F->nTot_splitx;
+
+			cudaErrorHandle(cudaMemcpy(F_dev, dF3+ind_dF3, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+			for (int l = 0; l <= size_F->lmax; l++)
+			{
+				int ind_dF = l*(2*l-1)*(2*l+1)/3;
+				long long int stride_dF = size_F->nR_compact;
+
+				int ind_u = l*(2*l-1)*(2*l+1)/3 + ip*size_F->nR_compact;
+				long long int stride_u = 0;
+
+				cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, 2*l+1, 2*l+1, 2*l+1,
+					&alpha_cublas, F_dev+ind_dF, 2*l+1, stride_dF,
+					u_dev+ind_u, 2*l+1, stride_u,
+					&beta_cublas, dF3_dev+ind_dF3_dev+ind_dF, 2*l+1, stride_dF, size_F->const_2Bxs));
+			}
+		}
+
+		// addup dF
+		addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F_dev);
+		cudaErrorHandle(cudaGetLastError());
+
+		int ind_dF = k*size_F->nTot_splitx;
+		cudaErrorHandle(cudaMemcpy(dF+ind_dF, dF3_dev, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
 	}
-}
 
-__host__ void cublasErrorHandle(const cublasStatus_t& err)
-{
-	if (err != CUBLAS_STATUS_SUCCESS) {
-		std::cout << "cuBlas Error: " << err << std::endl;
+	// free memory
+	cudaErrorHandle(cudaFree(X_dev));
+	cudaErrorHandle(cudaFree(X_ijk_dev));
+	cudaErrorHandle(cudaFree(u_dev));
+
+	//////////////////////////////
+	// circular convolution OJO //
+	//////////////////////////////
+
+	// OJO_ijk = flip(flip(flip(OJO,1),2),3)
+	// OJO_ijk = circshift(OJO_ijk,1,i)
+	// OJO_ijk = circshift(OJO_ijk,2,j)
+	// OJO_ijk = circshift(OJO_ijk,3,k)
+	// dF{r,i,j,k,p} = Fold{r,m,n,l}.*OJO_ijk{m,n,l,p}
+	// dF{r,i,j,k,p} = dF{r,i,j,k,p}*c(p)
+	// dF = sum(dF,'p')
+
+	// set up GPU arrays
+	cuDoubleComplex* OJO_dev;
+	cudaErrorHandle(cudaMalloc(&OJO_dev, 3*size_F->nx*sizeof(cuDoubleComplex)));
+	cudaErrorHandle(cudaMemcpy(OJO_dev, OJO, 3*size_F->nx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+	cuDoubleComplex* OJO_ijk_dev;
+	cudaErrorHandle(cudaMalloc(&OJO_ijk_dev, 3*size_F->nx*sizeof(cuDoubleComplex)));
+
+	// set up CPU arrays
+	permute_F(F, false, size_F);
+
+	// set up blocksize and gridsize
+	dim3 blocksize_512_nR(512, 1, 1);
+	dim3 gridsize_512_nR((int)size_F->nR_split/512+1, 1, 1);
+
+	// calculate
+	for (int is = 0; is < size_F->ns; is++) {
+		int nR_split;
+		if (is == size_F->ns-1) {
+			nR_split = size_F->nR_remainder;
+		} else {
+			nR_split = size_F->nR_split;
+		}
+
+		gridsize_512_nR.x = (int)nR_split/512+1;
+
+		cudaErrorHandle(cudaMemcpy(F_dev, F+is*size_F->nx*size_F->nR_split, size_F->nx*nR_split*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+		for (int i = 0; i < size_F->const_2Bx; i++) {
+			for (int j = 0; j < size_F->const_2Bx; j++) {
+				for (int k = 0; k < size_F->const_2Bx; k++) {
+					flip_shift <<<gridsize_8, blocksize_8>>> (OJO_dev, OJO_ijk_dev, i, j, k, size_F_dev);
+					cudaErrorHandle(cudaGetLastError());
+
+					if (is == size_F->ns-1) {
+						cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv[1], &alpha_cutensor, F_dev, OJO_ijk_dev,
+							&beta_cutensor, dF3_dev, dF3_dev, cutensor_workspace, worksize_conv[1], 0));
+					} else {
+						cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv[0], &alpha_cutensor, F_dev, OJO_ijk_dev,
+							&beta_cutensor, dF3_dev, dF3_dev, cutensor_workspace, worksize_conv[0], 0));
+					}
+
+					double c[3];
+					deriv_x(c, i, size_F->Bx, *L);
+					deriv_x(c+1, j, size_F->Bx, *L);
+					deriv_x(c+2, k, size_F->Bx, *L);
+
+					mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF3_dev, c[0], nR_split, size_F_dev);
+					cudaErrorHandle(cudaGetLastError());
+					mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF3_dev+nR_split, c[1], nR_split, size_F_dev);
+					cudaErrorHandle(cudaGetLastError());
+					mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF3_dev+2*nR_split, c[2], nR_split, size_F_dev);
+					cudaErrorHandle(cudaGetLastError());
+
+					for (int ip = 0; ip < 3; ip++) {
+						int ind_dF3 = is*size_F->nR_split + (i + j*size_F->const_2Bx + k*size_F->const_2Bxs)*size_F->nR_compact + ip*size_F->nTot_compact;
+						cudaMemcpy(dF3+ind_dF3, dF3_dev+ip*nR_split, nR_split*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+					}
+				}
+			}
+		}
 	}
-}
 
-__host__ void cutensor_initialize(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const Size_F* size_F)
-{
-	int mode_Fold[4] = {'i','j','k','r'};
-	int mode_X[4] = {'i','j','k','p'};
-	int mode_dF[2] = {'r','p'};
+	for (int k = 0; k < size_F->const_2Bx; k++) {
+		for (int ip = 0; ip < 3; ip++) {
+			int ind_dF3 = k*size_F->nTot_splitx + ip*size_F->nTot_compact;
+			int ind_dF3_dev = ip*size_F->nTot_splitx;
 
-	int64_t extent_Fold[4] = {size_F->const_2Bx, size_F->const_2Bx, size_F->const_2Bx, nR_split};
-	int64_t extent_X[4] = {size_F->const_2Bx, size_F->const_2Bx, size_F->const_2Bx, 3};
-	int64_t extent_dF[2] = {nR_split, 3};
+			cudaErrorHandle(cudaMemcpy(dF3_dev+ind_dF3_dev, dF3+ind_dF3, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+		}
 
-	cutensorTensorDescriptor_t desc_Fold;
-	cutensorTensorDescriptor_t desc_X;
-	cutensorTensorDescriptor_t desc_dF;
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_Fold,
-		4, extent_Fold, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_X,
-		4, extent_X, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_dF,
-		2, extent_dF, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F_dev);
+		cudaErrorHandle(cudaGetLastError());
 
-	uint32_t alignmentRequirement_Fold;
-	uint32_t alignmentRequirement_X;
-	uint32_t alignmentRequirement_temp;
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		Fold_dev, &desc_Fold, &alignmentRequirement_Fold));
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		X_dev, &desc_X, &alignmentRequirement_X));
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		dF_dev, &desc_dF, &alignmentRequirement_temp));
+		int ind_dF = k*size_F->nTot_splitx;
+		cudaErrorHandle(cudaMemcpy(dF3_dev+size_F->nTot_splitx, dF+ind_dF, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-	cutensorContractionDescriptor_t desc;
-	cutensorErrorHandle(cutensorInitContractionDescriptor(handle, &desc,
-		&desc_Fold, mode_Fold, alignmentRequirement_Fold,
-		&desc_X, mode_X, alignmentRequirement_X,
-		&desc_dF, mode_dF, alignmentRequirement_temp,
-		&desc_dF, mode_dF, alignmentRequirement_temp,
-		CUTENSOR_COMPUTE_64F));
+		add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev+size_F->nTot_splitx, dF3_dev, size_F_dev);
+		cudaErrorHandle(cudaGetLastError());
 
-	cutensorContractionFind_t find;
-	cutensorErrorHandle(cutensorInitContractionFind(handle, &find, CUTENSOR_ALGO_DEFAULT));
+		cudaErrorHandle(cudaMemcpy(dF+ind_dF, dF3_dev+size_F->nTot_splitx, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+	}
 
-	cutensorErrorHandle(cutensorContractionGetWorkspace(handle, &desc, &find, CUTENSOR_WORKSPACE_RECOMMENDED, worksize));
+	// free memory
+	cudaErrorHandle(cudaFree(OJO_dev));
+	cudaErrorHandle(cudaFree(OJO_ijk_dev));
+	cudaErrorHandle(cudaFree(F_dev));
 
-	cutensorErrorHandle(cutensorInitContractionPlan(handle, plan, &desc, &find, *worksize));
-}
+	if (worksize_max > 0) {
+		cudaErrorHandle(cudaFree(cutensor_workspace));
+	}
 
-__host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, Size_F size_F)
-{
-	int mode_Fold[3] = {'r','i','j'};
-	int mode_MR[2] = {'r','p'};
-	int mode_FMR[3] = {'i','j','p'};
+	///////////////////////
+	// kronecker product //
+	///////////////////////
 
-	int m = (2*l+1)*(2*l+1);
+	// set up GPU arrays
+	cuDoubleComplex** CG_dev = new cuDoubleComplex* [size_F->BR*size_F->BR];
+	for (int l1 = 0; l1 <= size_F->lmax; l1++) {
+		for (int l2 = 0; l2 <= size_F->lmax; l2++) {
+			int m = (2*l1+1)*(2*l2+1);
+			int ind_CG = l1+l2*size_F->BR;
+			cudaErrorHandle(cudaMalloc(&CG_dev[ind_CG], m*m*sizeof(cuDoubleComplex)));
+			cudaErrorHandle(cudaMemset(CG_dev[ind_CG], 0, m*m*sizeof(cuDoubleComplex)));
 
-	int64_t extent_Fold[3] = {m, size_F.const_2Bx, size_F.const_2Bx};
-	int64_t extent_MR[2] = {m, 3};
-	int64_t extent_FMR[3] = {size_F.const_2Bx, size_F.const_2Bx, 3};
+			double* CG_dev_d = (double*) CG_dev[ind_CG];
+			cudaErrorHandle(cudaMemcpy2D(CG_dev_d, 2*sizeof(double), CG[ind_CG], sizeof(double), sizeof(double), m*m, cudaMemcpyHostToDevice));
+		}
+	}
 
-	cutensorTensorDescriptor_t desc_Fold;
-	cutensorTensorDescriptor_t desc_MR;
-	cutensorTensorDescriptor_t desc_FMR;
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_Fold,
-		3, extent_Fold, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_MR,
-		2, extent_MR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
-	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_FMR,
-		3, extent_FMR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+	cuDoubleComplex* MR_dev;
+	cudaErrorHandle(cudaMalloc(&MR_dev, 3*size_F->nR_compact*sizeof(cuDoubleComplex)));
+	cudaErrorHandle(cudaMemcpy(MR_dev, MR, 3*size_F->nR_compact*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
 
-	uint32_t alignmentRequirement_Fold;
-	uint32_t alignmentRequirement_MR;
-	uint32_t alignmentRequirement_FMR;
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		Fold_dev, &desc_Fold, &alignmentRequirement_Fold));
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		MR_dev, &desc_MR, &alignmentRequirement_MR));
-	cutensorErrorHandle(cutensorGetAlignmentRequirement(handle,
-		FMR_dev, &desc_FMR, &alignmentRequirement_FMR));
+	cuDoubleComplex* FMR_dev;
+	int m = (2*size_F->lmax+1) * (2*size_F->lmax+1);
+	cudaErrorHandle(cudaMalloc(&FMR_dev, 3*m*sizeof(cuDoubleComplex)));
 
-	cutensorContractionDescriptor_t desc;
-	cutensorErrorHandle(cutensorInitContractionDescriptor(handle, &desc,
-		&desc_Fold, mode_Fold, alignmentRequirement_Fold,
-		&desc_MR, mode_MR, alignmentRequirement_MR,
-		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
-		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
-		CUTENSOR_COMPUTE_64F));
+	cuDoubleComplex* FMR_temp_dev;
+	cudaErrorHandle(cudaMalloc(&FMR_temp_dev, 3*size_F->const_2Bxs*sizeof(cuDoubleComplex)));
 
-	cutensorContractionFind_t find;
-	cutensorErrorHandle(cutensorInitContractionFind(handle, &find, CUTENSOR_ALGO_DEFAULT));
+	cuDoubleComplex** F_strided = new cuDoubleComplex* [size_F->BR];
+	for (int l = 0; l <= size_F->lmax; l++) {
+		int m = (2*l+1)*(2*l+1);
+		cudaErrorHandle(cudaMalloc(&F_strided[l], m*size_F->const_2Bxs*sizeof(cuDoubleComplex)));
+	}
 
-	cutensorErrorHandle(cutensorContractionGetWorkspace(handle, &desc, &find, CUTENSOR_WORKSPACE_RECOMMENDED, worksize));
+	// set up CPU arrays
+	permute_F(F, true, size_F);
 
-	cutensorErrorHandle(cutensorInitContractionPlan(handle, plan, &desc, &find, *worksize));
-}
+	// get c
+	double* c = new double[size_F->const_2Bx];
+	for (int i = 0; i < size_F->const_2Bx; i++) {
+		deriv_x(&c[i], i, size_F->Bx, *L);
+	}
 
-__host__ void init_Size_F(Size_F* size_F, int BR, int Bx)
-{
-	size_F->BR = BR;
-	size_F->Bx = Bx;
-	size_F->lmax = BR-1;
+	double* c_dev;
+	cudaErrorHandle(cudaMalloc(&c_dev, size_F->const_2Bx*sizeof(double)));
+	cudaErrorHandle(cudaMemcpy(c_dev, c, size_F->const_2Bx*sizeof(double), cudaMemcpyHostToDevice));
 
-	size_F->nR = (2*size_F->lmax+1) * (2*size_F->lmax+1) * (size_F->lmax+1);
-	size_F->nx = (2*Bx) * (2*Bx) * (2*Bx);
-	size_F->nTot = size_F->nR * size_F->nx;
+	// set up cutensor
+	cutensorContractionPlan_t* plan_FMR = new cutensorContractionPlan_t [size_F->BR];
+	size_t* worksize_FMR = new size_t [size_F->BR];
 
-	size_F->nR_compact = (size_F->lmax+1) * (2*size_F->lmax+1) * (2*size_F->lmax+3) / 3;
-	size_F->nTot_compact = size_F->nR_compact * size_F->nx;
+	for (int l1 = 0; l1 <= size_F->lmax; l1++) {
+		cutensor_initFMR(&handle_cutensor, &plan_FMR[l1], &worksize_FMR[l1], F_strided[l1], FMR_dev, FMR_temp_dev, l1, size_F);
+	}
 
-	size_F->const_2Bx = 2*Bx;
-	size_F->const_2Bxs = (2*Bx) * (2*Bx);
-	size_F->const_2lp1 = 2*size_F->lmax+1;
-	size_F->const_lp1 = size_F->lmax+1;
-	size_F->const_2lp1s = (2*size_F->lmax+1) * (2*size_F->lmax+1);
+	worksize_max = 0;
+	for (int l = 0; l <= size_F->lmax; l++) {
+		worksize_max = (worksize_FMR[l] > worksize_max) ? worksize_FMR[l] : worksize_max;
+	}
 
-	size_F->l_cum0 = size_F->const_2lp1;
-	size_F->l_cum1 = size_F->l_cum0*size_F->const_2lp1;
-	size_F->l_cum2 = size_F->l_cum1*size_F->const_lp1;
-	size_F->l_cum3 = size_F->l_cum2*size_F->const_2Bx;
-	size_F->l_cum4 = size_F->l_cum3*size_F->const_2Bx;
+	if (worksize_max > 0) {
+		cudaErrorHandle(cudaMalloc(&cutensor_workspace, worksize_max));
+	}
 
-	size_F->ns = size_F->const_2lp1;
-	size_F->nR_split = (int) size_F->nR_compact / (size_F->ns-1);
-	size_F->nR_remainder = size_F->nR_compact % (size_F->ns-1);
+	// set up blocksize and gridsize
+	dim3 blocksize_addMFR(size_F->const_2Bx, 3, 1);
+	dim3 gridsize_addMFR(size_F->const_2Bx, 1, 1);
 
-	size_F->nTot_splitx = size_F->nR_compact * size_F->const_2Bxs;
+	dim3 blocksize_deriv(512,1,1);
+	dim3 gridsize_deriv((int)size_F->nR_compact/512+1, size_F->const_2Bx, size_F->const_2Bx);
+
+	// calculate
+	for (int k = 0; k < size_F->const_2Bx; k++) {
+		int ind_Fold = k*size_F->nTot_splitx;
+		for (int l = 0; l <= size_F->lmax; l++) {
+			int ind = l*(2*l-1)*(2*l+1)/3;
+			int m = (2*l+1)*(2*l+1);
+			cudaErrorHandle(cudaMemcpy2D(F_strided[l], m*sizeof(cuDoubleComplex), F+ind_Fold+ind, size_F->nR_compact*sizeof(cuDoubleComplex),
+				m*sizeof(cuDoubleComplex), size_F->const_2Bxs, cudaMemcpyHostToDevice));
+		}
+
+		cudaErrorHandle(cudaMemset(dF3_dev, 0, 3*size_F->nTot_splitx*sizeof(cuDoubleComplex)));
+
+		for (int l = 0; l <= size_F->lmax; l++) {
+			int ind_cumR = l*(2*l-1)*(2*l+1)/3;
+
+			for (int l1 = 0; l1 <= size_F->lmax; l1++) {
+				for (int l2 = 0; l2 <= size_F->lmax; l2++) {
+					if (abs(l1-l2)<=l && l1+l2>=l) {
+						int ind_MR = l2*(2*l2-1)*(2*l2+1)/3;
+						int ind_CG = l1+l2*size_F->BR;
+						int l12 = (2*l1+1)*(2*l2+1);
+
+						alpha_cutensor.x = (double) -l12/(2*l+1);
+
+						for (int m = -l; m <= l; m++) {
+							int ind_CG_m = (l*l-(l1-l2)*(l1-l2)+m+l)*l12;
+
+							for (int n = -l; n <= l; n++) {
+								int ind_CG_n = (l*l-(l1-l2)*(l1-l2)+n+l)*l12;
+								int ind_mnl = m+l + (n+l)*(2*l+1) + ind_cumR;
+
+								cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, 2*l1+1, 2*l2+1, 2*l2+1,
+									&alpha_cublas, CG_dev[ind_CG]+ind_CG_m, 2*l2+1, 0, MR_dev+ind_MR, 2*l2+1, size_F->nR_compact,
+									&beta_cublas, FMR_temp_dev, 2*l1+1, (2*l1+1)*(2*l2+1), 3));
+
+								cublasErrorHandle(cublasZgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, 2*l1+1, 2*l1+1, 2*l2+1,
+									&alpha_cublas, FMR_temp_dev, 2*l1+1, (2*l1+1)*(2*l2+1), CG_dev[ind_CG]+ind_CG_n, 2*l2+1, 0,
+									&beta_cublas, FMR_dev, 2*l1+1, (2*l1+1)*(2*l1+1), 3));
+
+								cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_FMR[l1], &alpha_cutensor, F_strided[l1],
+									FMR_dev, &beta_cutensor, FMR_temp_dev, FMR_temp_dev, cutensor_workspace, worksize_FMR[l1], 0));
+
+								add_FMR <<<gridsize_addMFR, blocksize_addMFR>>> (dF3_dev, FMR_temp_dev, ind_mnl, size_F_dev);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		for (int ip = 0; ip < 3; ip++) {
+			int ind_dF3 = ind_Fold + ip*size_F->nTot_compact;
+			int ind_dF3_dev = ip*size_F->nTot_splitx;
+			cudaErrorHandle(cudaMemcpy(dF3+ind_dF3, dF3_dev+ind_dF3_dev, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+		}
+	}
+
+	for (int k = 0; k < size_F->const_2Bx; k++) {
+		// take derivative about x
+		for (int ip = 0; ip < 3; ip++) {
+			int ind_dF3 = k*size_F->nTot_splitx + ip*size_F->nTot_compact;
+			int ind_dF3_dev = ip*size_F->nTot_splitx;
+
+			cudaErrorHandle(cudaMemcpy(dF3_dev+ind_dF3_dev, dF3+ind_dF3, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+			mulImg_FTot <<<gridsize_deriv, blocksize_deriv>>> (dF3_dev+ind_dF3_dev, c_dev, ip, k, size_F_dev);
+			cudaErrorHandle(cudaGetLastError());
+		}
+
+		// addup dF
+		addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F_dev);
+		cudaErrorHandle(cudaGetLastError());
+
+		int ind_dF = k*size_F->nTot_splitx;
+		cudaErrorHandle(cudaMemcpy(dF3_dev+size_F->nTot_splitx, dF+ind_dF, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+
+		add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev+size_F->nTot_splitx, dF3_dev, size_F_dev);
+		cudaErrorHandle(cudaGetLastError());
+
+		cudaErrorHandle(cudaMemcpy(dF+ind_dF, dF3_dev+size_F->nTot_splitx, size_F->nTot_splitx*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+	}
+
+	// free memory
+	cudaErrorHandle(cudaFree(dF3_dev));
+	cudaErrorHandle(cudaFree(MR_dev));
+	cudaErrorHandle(cudaFree(FMR_dev));
+	cudaErrorHandle(cudaFree(FMR_temp_dev));
+	cudaErrorHandle(cudaFree(c_dev));
+
+	if (worksize_max > 0) {
+		cudaErrorHandle(cudaFree(cutensor_workspace));
+	}
+
+	for (int l1 = 0; l1 <= size_F->lmax; l1++) {
+		for (int l2 = 0; l2 <= size_F->lmax; l2++) {
+			int ind_CG = l1+l2*size_F->BR;
+			cudaErrorHandle(cudaFree(CG_dev[ind_CG]));
+		}
+	}
+
+	for (int l = 0; l <= size_F->lmax; l++) {
+		cudaErrorHandle(cudaFree(F_strided[l]));
+	}
+
+	delete[] c;
+	delete[] CG_dev;
+	delete[] F_strided;
+	delete[] dF3;
+	delete[] plan_FMR;
+	delete[] worksize_FMR;
 }
 
