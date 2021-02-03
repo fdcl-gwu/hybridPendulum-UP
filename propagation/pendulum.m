@@ -1,4 +1,4 @@
-function [ stat, MFG ] = pendulum( use_mex, method, path )
+function [ stat, MFG ] = pendulum( use_mex, method, FP, path )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -10,6 +10,18 @@ end
 
 if ~exist('method','var') || isempty(method)
     method = 'euler';
+end
+
+if ~exist('FP','var') || isempty(FP)
+    FP = 64;
+end
+
+if FP == 64
+    precision = 'double';
+elseif FP == 32
+    precision = 'single';
+else
+    error('FP must be 32 or 64');
 end
 
 if exist('path','var') && ~isempty(path)
@@ -56,7 +68,7 @@ Ra = [ca,-sa,zeros(1,1,2*BR);sa,ca,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*B
 Rb = [cb,zeros(1,1,2*BR),sb;zeros(1,1,2*BR),ones(1,1,2*BR),zeros(1,1,2*BR);-sb,zeros(1,1,2*BR),cb];
 Rg = [cg,-sg,zeros(1,1,2*BR);sg,cg,zeros(1,1,2*BR);zeros(1,1,2*BR),zeros(1,1,2*BR),ones(1,1,2*BR)];
 
-R = zeros(3,3,2*BR,2*BR,2*BR);
+R = zeros(3,3,2*BR,2*BR,2*BR,precision);
 for i = 1:2*BR
     for j = 1:2*BR
         for k = 1:2*BR
@@ -67,7 +79,7 @@ end
 
 % grid over R^3
 L = 10;
-x = zeros(3,2*Bx,2*Bx,2*Bx);
+x = zeros(3,2*Bx,2*Bx,2*Bx,precision);
 for i = 1:2*Bx
     for j = 1:2*Bx
         for k = 1:2*Bx
@@ -77,19 +89,22 @@ for i = 1:2*Bx
 end
 
 % weights
-w = zeros(1,2*BR);
+w = zeros(1,2*BR,precision);
 for j = 1:2*BR
     w(j) = 1/(4*BR^3)*sin(beta(j))*sum(1./(2*(0:BR-1)+1).*sin((2*(0:BR-1)+1)*beta(j)));
 end
 
 % Wigner_d
-d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*BR);
+d = zeros(2*lmax+1,2*lmax+1,lmax+1,2*BR,precision);
 for j = 1:2*BR
     d(:,:,:,j) = Wigner_d(beta(j),lmax);
 end
 
 % derivatives
 u = getu(lmax);
+if FP == 32
+    u = single(u);
+end
 
 % CG coefficient
 warning('off','MATLAB:nearlySingularMatrix');
@@ -98,6 +113,9 @@ CG = cell(BR,BR);
 for l1 = 0:lmax
     for l2 = 0:lmax
         CG{l1+1,l2+1} = clebsch_gordan(l1,l2);
+        if FP == 32
+            CG{l1+1,l2+1} = single(CG{l1+1,l2+1});
+        end
     end
 end
 
@@ -105,9 +123,9 @@ warning('on','MATLAB:nearlySingularMatrix');
 
 % Fourier transform of x
 if use_mex
-    X = zeros(2*Bx,2*Bx,2*Bx,3);
+    X = zeros(2*Bx,2*Bx,2*Bx,3,precision);
 else
-    X = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3);
+    X = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3,precision);
 end
 
 for i = 1:3
@@ -120,9 +138,9 @@ ojo = -cross(x,permute(pagefun(@mtimes,J,permute(gpuArray(x),...
 ojo = permute(pagefun(@mtimes,J^-1,permute(ojo,[1,5,2,3,4])),[1,3,4,5,2]);
 
 if use_mex
-    OJO = zeros(2*Bx,2*Bx,2*Bx,3);
+    OJO = zeros(2*Bx,2*Bx,2*Bx,3,precision);
 else
-    OJO = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3);
+    OJO = gpuArray.zeros(2*Bx,2*Bx,2*Bx,3,precision);
 end
 
 for i = 1:3
@@ -136,13 +154,13 @@ mR = -m*g*cross(repmat(rho,1,2*BR,2*BR,2*BR),permute(R(3,:,:,:,:),[2,3,4,5,1]));
 mR = permute(pagefun(@mtimes,J^-1,permute(gpuArray(mR),[1,5,2,3,4])),[1,3,4,5,2]);
 
 if use_mex
-    MR = zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+    MR = zeros(2*lmax+1,2*lmax+1,lmax+1,3,precision);
 else
-    MR = gpuArray.zeros(2*lmax+1,2*lmax+1,lmax+1,3);
+    MR = gpuArray.zeros(2*lmax+1,2*lmax+1,lmax+1,3,precision);
 end
 
 for i = 1:3
-    F1 = gpuArray.zeros(2*BR,2*BR,2*BR);
+    F1 = gpuArray.zeros(2*BR,2*BR,2*BR,precision);
     for k = 1:2*BR
         F1(:,k,:) = fftn(mR(i,:,k,:));
     end
@@ -192,15 +210,19 @@ ExvR = zeros(3,3,Nt);
 EvRvR = zeros(3,3,Nt);
 
 [ER(:,:,1),Ex(:,1),Varx(:,:,1),EvR(:,1),ExvR(:,:,1),EvRvR(:,:,1),...
-    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f,R,x,w);
+    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)]...
+    = get_stat(double(f),double(R),double(x),double(w));
 
 %% propagation
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+if FP == 32
+    sf = single(sf);
+    L = single(L);
+end
+
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,precision);
 for nt = 1:Nt-1
-    tic;
-    
     % forward
-    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,precision);
     for k = 1:2*BR
         F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
     end
@@ -217,14 +239,20 @@ for nt = 1:Nt-1
     end
     
     % propagating Fourier coefficients
+    tic;
     if use_mex
-        F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG,method);
+        if FP == 32
+            F = pendulum_propagate32(F,X,OJO,MR,1/sf,L,u,CG,method);
+        elseif FP == 64
+            F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG,method);
+        end
     else
-        F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method);
+        F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method,precision);
     end
+    toc;
     
     % backward
-    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
+    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx,precision);
     for m = -lmax:lmax
         for n = -lmax:lmax
             lmin = max(abs(m),abs(n));
@@ -238,8 +266,8 @@ for nt = 1:Nt-1
         end
     end
 
-    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
-    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
+    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx,precision));
+    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx,precision));
     F1 = ifftshift(ifftshift(F1,1),3);
     F1 = flip(flip(F1,1),3);
     for k = 1:2*BR
@@ -247,13 +275,12 @@ for nt = 1:Nt-1
     end
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
-        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
+        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
+        = get_stat(double(f),double(R),double(x),double(w));
     
     if saveToFile
         save(strcat(path,'\f',num2str(nt+1)),'f');
     end
-    
-    toc;
 end
 
 stat.ER = ER;
@@ -285,19 +312,19 @@ end
 end
 
 
-function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG, method )
+function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG, method, precision )
 
 u = gpuArray(u);
-dF1 = derivative(gpuArray(Fold),X,OJO,MR,L,u,CG);
+dF1 = derivative(gpuArray(Fold),X,OJO,MR,L,u,CG,precision);
 
 if strcmpi(method,'euler')
-    Fnew = gather(Fold+dt*dF1);
+    Fnew = Fold+dt*dF1;
     return;
 end
 
 % midpoint method
 F2 = Fold+dF1*dt/2;
-dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG);
+dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
 
 if strcmpi(method,'midpoint')
     Fnew = Fold+dt*dF2;
@@ -306,10 +333,10 @@ end
 
 % Runge-Kutta method
 F3 = Fold + dF2*dt/2;
-dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG);
+dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG,precision);
 
 F4 = Fold + dF3*dt;
-dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG);
+dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG,precision);
 
 if strcmpi(method,'runge-kutta')
     Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
@@ -321,18 +348,18 @@ error('''method'' must be one of ''euler'',''midpoint'', or ''Runge-Kutta''');
 end
 
 
-function [ dF ] = derivative( F, X, OJO, MR, L, u, CG )
+function [ dF ] = derivative( F, X, OJO, MR, L, u, CG, precision )
 
 BR = size(F,3);
 Bx = size(F,4)/2;
 lmax = BR-1;
 
-dF = gpuArray.zeros(size(F));
+dF = gpuArray.zeros(size(F),precision);
 
 % Omega hat
-temp1 = gpuArray.zeros(size(dF));
-temp2 = gpuArray.zeros(size(dF));
-temp3 = gpuArray.zeros(size(dF));
+temp1 = gpuArray.zeros(size(dF),precision);
+temp2 = gpuArray.zeros(size(dF),precision);
+temp3 = gpuArray.zeros(size(dF),precision);
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
@@ -382,9 +409,9 @@ end
 clear temp1 temp2 temp3
 
 % -mg*cross(rho,R'*e3)
-temp1 = gpuArray.zeros(size(F));
-temp2 = gpuArray.zeros(size(F));
-temp3 = gpuArray.zeros(size(F));
+temp1 = gpuArray.zeros(size(F),precision);
+temp2 = gpuArray.zeros(size(F),precision);
+temp3 = gpuArray.zeros(size(F),precision);
 for l = 0:lmax
     for l2 = 0:lmax
         ind2 = -l2+lmax+1:l2+lmax+1;

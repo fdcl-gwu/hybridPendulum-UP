@@ -62,10 +62,12 @@ if isDensity
             save(strcat(path,'\v_R'),'v_R');
         end
         
-        for nt = 1:Nt
-            if nt > 1
-                f = load(strcat(path,'\f',num2str(nt)));
-                f = f.f;
+        parfor nt = 1:Nt
+            f = load(strcat(path,'\f',num2str(nt)));
+            f = f.f;
+            
+            if ~isa(f,'double')
+                f = double(f);
             end
             
             fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
@@ -77,13 +79,14 @@ if isDensity
                     for i = 1:3
                         for ntheta = 1:Ntheta
                             v = v_R{nt1,nt2,ntheta,i};
+                            ind = ind_R{nt1,nt2,ntheta,i};
                             if size(v,1) > 1
                                 f_interp = scatteredInterpolant(v',fR(ind_R{nt1,nt2,ntheta,i})');
                                 c(nt1,nt2,i) = c(nt1,nt2,i) + f_interp(zeros(1,size(v,1)));
                             else
                                 [v,I] = sort(v);
-                                ind_R{nt1,nt2,ntheta,i} = ind_R{nt1,nt2,ntheta,i}(I);
-                                c(nt1,nt2,i) = c(nt1,nt2,i) + interp1(v,fR(ind_R{nt1,nt2,ntheta,i}),0);
+                                ind = ind(I);
+                                c(nt1,nt2,i) = c(nt1,nt2,i) + interp1(v,fR(ind),0);
                             end
                         end
                     end
