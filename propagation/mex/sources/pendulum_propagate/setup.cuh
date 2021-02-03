@@ -5,7 +5,38 @@
 #include <cutensor.h>
 #include <cublas_v2.h>
 
-constexpr double PI = 3.141592653589793;
+#include "mex.h"
+
+#define FP32 false
+#if FP32
+	typedef float myReal;
+	typedef cuComplex myComplex;
+
+	#define mycutensor_datatype CUDA_C_32F
+	#define mycutensor_computetype CUTENSOR_COMPUTE_32F
+	#define mycublasgemmStridedBatched cublasCgemm3mStridedBatched
+	#define mycuCadd cuCaddf
+	#define make_myComplex make_cuComplex
+
+	#define mymxGetComplex mxGetComplexSingles
+	#define mymxGetReal mxGetSingles
+	#define mymxRealClass mxSINGLE_CLASS
+#else
+	typedef double myReal;
+	typedef cuDoubleComplex myComplex;
+
+	#define mycutensor_datatype CUDA_C_64F
+	#define mycutensor_computetype CUTENSOR_COMPUTE_64F
+	#define mycublasgemmStridedBatched cublasZgemmStridedBatched
+	#define mycuCadd cuCadd
+	#define make_myComplex make_cuDoubleComplex
+
+	#define mymxGetComplex mxGetComplexDoubles
+	#define mymxGetReal mxGetDoubles
+	#define mymxRealClass mxDOUBLE_CLASS
+#endif
+
+constexpr myReal PI = 3.141592653589793;
 
 struct Size_F {
 	int BR;
@@ -43,9 +74,9 @@ __host__ void cutensorErrorHandle(const cutensorStatus_t& err);
 __host__ void cublasErrorHandle(const cublasStatus_t& err);
 
 __host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const bool issmall, const Size_F* size_F);
+	const void* Fold_dev, const void* X_dev, const void* dF_dev, const int nR_split, const bool issmall, const Size_F* size_F);
 __host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, const bool issmall, const Size_F* size_F);
+	const void* Fold_dev, const void* MR_dev, const void* FMR_dev, const int l, const bool issmall, const Size_F* size_F);
 
 __host__ void init_Size_F(Size_F* size_F, int BR, int Bx);
 

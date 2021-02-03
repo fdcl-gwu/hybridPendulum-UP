@@ -7,23 +7,23 @@
 
 #include "setup.cuh"
 
-__global__ void flip_shift(const cuDoubleComplex* X, cuDoubleComplex* X_ijk, const int is, const int js, const int ks, const Size_F* size_F);
-__global__ void addup_F(cuDoubleComplex* dF, const int nTot);
-__global__ void add_F(cuDoubleComplex* dF, const cuDoubleComplex* F, const int nTot);
-__global__ void mulImg_FR(cuDoubleComplex* dF, const double c, const int nR);
-__global__ void add_FMR_small(cuDoubleComplex* dF, const cuDoubleComplex* FMR, const int ind_cumR, const Size_F* size_F);
-__global__ void add_FMR_large(cuDoubleComplex* dF, const cuDoubleComplex* FMR, const int ind_cumR, const Size_F* size_F);
-__global__ void mulImg_FTot_small(cuDoubleComplex* dF, const double* c, const int dim, const Size_F* size_F);
-__global__ void mulImg_FTot_large(cuDoubleComplex* dF, const double* c, const int dim, const int k, const Size_F* size_F);
-__global__ void integrate_Fnew(cuDoubleComplex* Fnew, const cuDoubleComplex* Fold, const cuDoubleComplex* dF, const double dt, const int nTot);
+__global__ void flip_shift(const myComplex* X, myComplex* X_ijk, const int is, const int js, const int ks, const Size_F* size_F);
+__global__ void addup_F(myComplex* dF, const int nTot);
+__global__ void add_F(myComplex* dF, const myComplex* F, const int nTot);
+__global__ void mulImg_FR(myComplex* dF, const myReal c, const int nR);
+__global__ void add_FMR_small(myComplex* dF, const myComplex* FMR, const int ind_cumR, const Size_F* size_F);
+__global__ void add_FMR_large(myComplex* dF, const myComplex* FMR, const int ind_cumR, const Size_F* size_F);
+__global__ void mulImg_FTot_small(myComplex* dF, const myReal* c, const int dim, const Size_F* size_F);
+__global__ void mulImg_FTot_large(myComplex* dF, const myReal* c, const int dim, const int k, const Size_F* size_F);
+__global__ void integrate_Fnew(myComplex* Fnew, const myComplex* Fold, const myComplex* dF, const myReal dt, const int nTot);
 
-__host__ void modify_F(const cuDoubleComplex* F, cuDoubleComplex* F_modify, bool reduce, Size_F* size_F);
-__host__ void permute_F(cuDoubleComplex* F, bool R_first, const Size_F* size_F);
-__host__ void modify_u(const cuDoubleComplex* u, cuDoubleComplex* u_modify, Size_F* size_F);
+__host__ void modify_F(const myComplex* F, myComplex* F_modify, bool reduce, Size_F* size_F);
+__host__ void permute_F(myComplex* F, bool R_first, const Size_F* size_F);
+__host__ void modify_u(const myComplex* u, myComplex* u_modify, Size_F* size_F);
 
-__host__ void deriv_x(double* c, const int n, const int B, const double L);
-__host__ void get_dF_small(cuDoubleComplex* dF, const cuDoubleComplex* F, const cuDoubleComplex* X, const cuDoubleComplex* OJO, const cuDoubleComplex* MR,
-	const double* L, const cuDoubleComplex* u, const double* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
-__host__ void get_dF_large(cuDoubleComplex* dF, cuDoubleComplex* F, const cuDoubleComplex* X, const cuDoubleComplex* OJO, const cuDoubleComplex* MR,
-    const double* L, const cuDoubleComplex* u, const double* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
+__host__ void deriv_x(myReal* c, const int n, const int B, const myReal L);
+__host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR,
+	const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
+__host__ void get_dF_large(myComplex* dF, myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR,
+    const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
 

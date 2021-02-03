@@ -26,7 +26,7 @@ __host__ void cublasErrorHandle(const cublasStatus_t& err)
 }
 
 __host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	void* Fold_dev, void* X_dev, void* dF_dev, const int nR_split, const bool issmall, const Size_F* size_F)
+	const void* Fold_dev, const void* X_dev, const void* dF_dev, const int nR_split, const bool issmall, const Size_F* size_F)
 {
 	int mode_Fold[4];
 	int mode_X[4] = {'i','j','k','p'};
@@ -62,11 +62,11 @@ __host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPla
 	cutensorTensorDescriptor_t desc_X;
 	cutensorTensorDescriptor_t desc_dF;
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_Fold,
-		4, extent_Fold, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		4, extent_Fold, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_X,
-		4, extent_X, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		4, extent_X, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_dF,
-		2, extent_dF, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		2, extent_dF, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 
 	uint32_t alignmentRequirement_Fold;
 	uint32_t alignmentRequirement_X;
@@ -84,7 +84,7 @@ __host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPla
 		&desc_X, mode_X, alignmentRequirement_X,
 		&desc_dF, mode_dF, alignmentRequirement_temp,
 		&desc_dF, mode_dF, alignmentRequirement_temp,
-		CUTENSOR_COMPUTE_64F));
+		mycutensor_computetype));
 
 	cutensorContractionFind_t find;
 	cutensorErrorHandle(cutensorInitContractionFind(handle, &find, CUTENSOR_ALGO_DEFAULT));
@@ -95,7 +95,7 @@ __host__ void cutensor_initConv(cutensorHandle_t* handle, cutensorContractionPla
 }
 
 __host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan_t* plan, size_t* worksize,
-	cuDoubleComplex* Fold_dev, cuDoubleComplex* MR_dev, cuDoubleComplex* FMR_dev, int l, const bool issmall, const Size_F* size_F)
+	const void* Fold_dev, const void* MR_dev, const void* FMR_dev, const int l, const bool issmall, const Size_F* size_F)
 {
 	int mode_Fold[2] = {'r','x'};
 	int mode_MR[2] = {'r','p'};
@@ -125,11 +125,11 @@ __host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan
 	cutensorTensorDescriptor_t desc_MR;
 	cutensorTensorDescriptor_t desc_FMR;
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_Fold,
-		2, extent_Fold, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		2, extent_Fold, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_MR,
-		2, extent_MR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		2, extent_MR, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 	cutensorErrorHandle(cutensorInitTensorDescriptor(handle, &desc_FMR,
-		2, extent_FMR, NULL, CUDA_C_64F, CUTENSOR_OP_IDENTITY));
+		2, extent_FMR, NULL, mycutensor_datatype, CUTENSOR_OP_IDENTITY));
 
 	uint32_t alignmentRequirement_Fold;
 	uint32_t alignmentRequirement_MR;
@@ -147,7 +147,7 @@ __host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan
 		&desc_MR, mode_MR, alignmentRequirement_MR,
 		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
 		&desc_FMR, mode_FMR, alignmentRequirement_FMR,
-		CUTENSOR_COMPUTE_64F));
+		mycutensor_computetype));
 
 	cutensorContractionFind_t find;
 	cutensorErrorHandle(cutensorInitContractionFind(handle, &find, CUTENSOR_ALGO_DEFAULT));
