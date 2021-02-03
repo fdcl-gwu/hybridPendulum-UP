@@ -8,8 +8,16 @@ if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
 end
 
+if use_mex 
+    addpath('mex');
+end
+
 if ~exist('method','var') || isempty(method)
     method = 'euler';
+end
+
+if ~(strcmpi(method,'euler') || strcmpi(method,'midpoint') || strcmpi(method,'RK2') || strcmpi(method,'RK4'))
+    error('''method'' must be one of ''euler'',''midpoint'', ''RK2'', or ''RK4''');
 end
 
 if ~exist('FP','var') || isempty(FP)
@@ -28,10 +36,6 @@ if exist('path','var') && ~isempty(path)
     saveToFile = true;
 else
     saveToFile = false;
-end
-
-if use_mex 
-    addpath('mex');
 end
 
 % time
@@ -322,28 +326,34 @@ if strcmpi(method,'euler')
     return;
 end
 
-% midpoint method
-F2 = Fold+dF1*dt/2;
-dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
+% midpoint method, RK2 method
+if strcmpi(method,'midpoint') || strcmpi(method,'RK4')
+    F2 = Fold+dF1*dt/2;
+    dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
 
-if strcmpi(method,'midpoint')
-    Fnew = Fold+dt*dF2;
+    if strcmpi(method,'midpoint')
+        Fnew = Fold+dt*dF2;
+        return;
+    end
+elseif strcmp(method,'RK2')
+    F2 = Fold+dF1*dt;
+    dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
+    
+    Fnew = Fold+dt/2*(dF1+dF2);
     return;
 end
 
-% Runge-Kutta method
+% RK4 method
 F3 = Fold + dF2*dt/2;
 dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG,precision);
 
 F4 = Fold + dF3*dt;
 dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG,precision);
 
-if strcmpi(method,'runge-kutta')
+if strcmpi(method,'RK4')
     Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
     return;
 end
-
-error('''method'' must be one of ''euler'',''midpoint'', or ''Runge-Kutta''');
 
 end
 

@@ -7,7 +7,7 @@
 
 #include "mex.h"
 
-#define FP32 false
+#define FP32 true
 #if FP32
 	typedef float myReal;
 	typedef cuComplex myComplex;
