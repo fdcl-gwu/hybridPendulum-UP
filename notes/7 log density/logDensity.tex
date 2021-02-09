@@ -82,7 +82,7 @@ The Fokker-Planck equation for a gyroscope with bias is given by
 \end{align*}
 Let $f=e^g$, then $g$ satisfies the following partial differential equation
 \begin{align*}
-	\frac{\partial g(R,x,t)}{\partial t} = &-3 - \sum_{i=1}^3 (\Omega_i+x_i) \liediff_ig(R,x,t) + \sum_{i,j=1}^3 G_{1,ij}\left(\liediff_i\liediff_j g(R,x,t) + \liediff_ig(R,x,t)\liediff_jg(R,x,t)\right) \\
+	\frac{\partial g(R,x,t)}{\partial t} = &-\sum_{i=1}^3 (\Omega_i+x_i) \liediff_ig(R,x,t) + \sum_{i,j=1}^3 G_{1,ij}\left(\liediff_i\liediff_j g(R,x,t) + \liediff_ig(R,x,t)\liediff_jg(R,x,t)\right) \\
 	&+ \sum_{i,j=1}^3 G_{2,ij}\left(\frac{\partial^2g(R,x,t)}{\partial x_i \partial x_j} + \frac{\partial g(R,x,t)}{\partial x_i} \frac{\partial g(R,x,t)}{\partial x_j}\right).
 \end{align*}
 

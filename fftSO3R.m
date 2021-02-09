@@ -1,4 +1,4 @@
-function [ F, f ] = fftSO3R( func, BR, Bx, isreal )
+function [ F, f ] = fftSO3R( func, BR, Bx )
 
 addpath('matrix Fisher');
 addpath('rotation3d');
@@ -73,14 +73,18 @@ for j = 1:2*BR
 end
 
 % function values
-R_linInd = reshape(R,3,3,(2*BR)^3);
-f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
-for i = 1:2*Bx
-    for j = 1:2*Bx
-        parfor k = 1:2*Bx
-            f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*BR,2*BR,2*BR);
+if isa(func,'function_handle')
+    R_linInd = reshape(R,3,3,(2*BR)^3);
+    f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+    for i = 1:2*Bx
+        for j = 1:2*Bx
+            parfor k = 1:2*Bx
+                f(:,:,:,i,j,k) = reshape(func(R_linInd,x(:,i,j,k)),2*BR,2*BR,2*BR);
+            end
         end
     end
+else
+    f = func;
 end
 
 % fft

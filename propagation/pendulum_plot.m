@@ -19,7 +19,8 @@ if isDensity
     Nt = 0;
     for i = 1:length(files)
         if strcmp(files(i).name(1),'f')
-            nt = str2double(files(i).name(2:3));
+            ind_dot = strfind(files(i).name,'.');
+            nt = str2double(files(i).name(2:ind_dot-1));
             if nt > Nt
                 Nt = nt;
             end

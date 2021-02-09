@@ -1,4 +1,4 @@
-function [ stat, MFG, R, x ] = pendulum_MC(  )
+function [ stat, MFG, R_res, x_res ] = pendulum_MC(  )
 
 addpath('../matrix Fisher');
 addpath('../rotation3d');
@@ -19,22 +19,14 @@ T = 1;
 Nt = T*sf+1;
 
 % initial conditions
-S = diag([4,4,4]);
+S = diag([10,10,10]);
 U = expRot([pi*2/3,0,0]);
-R = zeros(3,3,Ns,Nt);
-R(:,:,:,1) = gather(pdf_MF_sampling_gpu(U*S,Ns));
+R = pdf_MF_sampling_gpu(U*S,Ns);
 
 Miu = [0;0;0];
 Sigma = 1^2*eye(3);
-x = zeros(3,Ns,Nt);
-x(:,:,1) = mvnrnd(Miu,Sigma,Ns)';
-
-% simulate
-for nt = 1:Nt-1
-    tic;
-    [R(:,:,:,nt+1),x(:,:,nt+1)] = LGVI(R(:,:,:,nt),x(:,:,nt),1/sf,m,rho,J,g);
-    toc;
-end
+x = mvnrnd(Miu,Sigma,Ns)';
+x = gpuArray(x);
 
 % statistics
 MFG.U = zeros(3,3,Nt);
@@ -51,35 +43,28 @@ stat.EvR = zeros(3,Nt);
 stat.ExvR = zeros(3,3,Nt);
 stat.EvRvR = zeros(3,3,Nt);
 
-for nt = 1:Nt
-    stat.ER(:,:,nt) = sum(R(:,:,:,nt),3)/Ns;
-    stat.Ex(:,nt) = sum(x(:,:,nt),2)/Ns;
-    stat.Varx(:,:,nt) = sum(permute(x(:,:,nt),[1,3,2]).*...
-        permute(x(:,:,nt),[3,1,2]),3)/Ns - stat.Ex(:,nt)*stat.Ex(:,nt).';
+[stat.ER(:,:,1),stat.Ex(:,1),stat.Varx(:,:,1),stat.EvR(:,1),stat.ExvR(:,:,1),stat.EvRvR(:,:,1),...
+        MFG.U(:,:,1),MFG.S(:,:,1),MFG.V(:,:,1),MFG.P(:,:,1),MFG.Miu(:,1),MFG.Sigma(:,:,1)] = ...
+        get_stat(gather(R),gather(x),zeros(3));
+
+% simulate
+R_res = zeros(3,3,1000,Nt);
+x_res = zeros(3,1000,Nt);
+R_res(:,:,:,1) = gather(R(:,:,1:1000));
+x_res(:,:,1) = gather(x(:,1:1000));
+
+for nt = 1:Nt-1
+    tic;
     
-    [U,D,V] = psvd(stat.ER(:,:,nt));
-    s = pdf_MF_M2S(diag(D),diag(S));
+    [R,x] = LGVI(R,x,1/sf,m,rho,J,g);
+    R_res(:,:,:,nt+1) = gather(R(:,:,1:1000));
+    x_res(:,:,nt+1) = gather(x(:,1:1000));
     
-    MFG.U(:,:,nt) = U;
-    MFG.V(:,:,nt) = V;
-    MFG.S(:,:,nt) = diag(s);
+    [stat.ER(:,:,nt+1),stat.Ex(:,nt+1),stat.Varx(:,:,nt+1),stat.EvR(:,nt+1),stat.ExvR(:,:,nt+1),stat.EvRvR(:,:,nt+1),...
+        MFG.U(:,:,nt+1),MFG.S(:,:,nt+1),MFG.V(:,:,nt+1),MFG.P(:,:,nt+1),MFG.Miu(:,nt+1),MFG.Sigma(:,:,nt+1)] = ...
+        get_stat(gather(R),gather(x),MFG.S(:,:,nt));
     
-    Q = mulRot(U',mulRot(R(:,:,:,nt),V));
-    vR = permute(cat(1,s(2)*Q(3,2,:)-s(3)*Q(2,3,:),...
-        s(3)*Q(1,3,:)-s(1)*Q(3,1,:),s(1)*Q(2,1,:)-s(2)*Q(1,2,:)),[1,3,2]);
-    
-    stat.EvR(:,nt) = sum(vR,2)/Ns;
-    stat.ExvR(:,:,nt) = sum(permute(x(:,:,nt),[1,3,2]).*permute(vR,[3,1,2]),3)/Ns;
-    stat.EvRvR(:,:,nt) = sum(permute(vR,[1,3,2]).*permute(vR,[3,1,2]),3)/Ns;
-    
-    covxx = stat.Varx(:,:,nt);
-    covxvR = stat.ExvR(:,:,nt)-stat.Ex(:,nt)*stat.EvR(:,nt).';
-    covvRvR = stat.EvRvR(:,:,nt)-stat.EvR(:,nt)*stat.EvR(:,nt).';
-    
-    MFG.P(:,:,nt) = covxvR*covvRvR^-1;
-    MFG.Miu(:,nt) = stat.Ex(:,nt)-MFG.P(:,:,nt)*stat.EvR(:,nt);
-    MFG.Sigma(:,:,nt) = covxx-MFG.P(:,:,nt)*covxvR.'+...
-        MFG.P(:,:,nt)*(trace(MFG.S(:,:,nt))*eye(3)-MFG.S(:,:,nt))*MFG.P(:,:,nt).';
+    toc;
 end
 
 rmpath('../matrix Fisher');
@@ -146,14 +131,44 @@ while n_finished < Ns
     n_step = n_step+1;
 end
 
-R = gather(mulRot(R,dR));
+R = mulRot(R,dR);
     
 M2 = -m*g*permute(cat(1,rho(2)*R(3,3,:)-rho(3)*R(3,2,:),...
     rho(3)*R(3,1,:)-rho(1)*R(3,3,:),...
     rho(1)*R(3,2,:)-rho(2)*R(3,1,:)),[1,3,2]);
-x = gather(J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x,[1,3,2])),[1,3,2]) + ...
-    dt/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + ...
-    dt/2*M2));
+x = J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x,[1,3,2])),[1,3,2]) + ...
+    dt/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + dt/2*M2);
+
+end
+
+
+function [ ER, Ex, Varx, EvR, ExvR, EvRvR, U, S, V, P, Miu, Sigma ] = get_stat(R, x, S)
+
+Ns = size(R,3);
+
+ER = sum(R,3)/Ns;
+Ex = sum(x,2)/Ns;
+Varx = sum(permute(x,[1,3,2]).*permute(x,[3,1,2]),3)/Ns - Ex*Ex.';
+
+[U,D,V] = psvd(ER);
+s = pdf_MF_M2S(diag(D),diag(S));
+S = diag(s);
+
+Q = mulRot(U',mulRot(R,V));
+vR = permute(cat(1,s(2)*Q(3,2,:)-s(3)*Q(2,3,:),...
+    s(3)*Q(1,3,:)-s(1)*Q(3,1,:),s(1)*Q(2,1,:)-s(2)*Q(1,2,:)),[1,3,2]);
+
+EvR = sum(vR,2)/Ns;
+ExvR = sum(permute(x,[1,3,2]).*permute(vR,[3,1,2]),3)/Ns;
+EvRvR = sum(permute(vR,[1,3,2]).*permute(vR,[3,1,2]),3)/Ns;
+
+covxx = Varx;
+covxvR = ExvR-Ex*EvR.';
+covvRvR = EvRvR-EvR*EvR.';
+
+P = covxvR*covvRvR^-1;
+Miu = Ex-P*EvR;
+Sigma = covxx-P*covxvR.'+P*(trace(S)*eye(3)-S)*P.';
 
 end
 

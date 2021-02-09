@@ -40,10 +40,91 @@ The Fokker-Planck equation is
 	\frac{\partial p(R,\Omega,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i (\Omega_ip(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3)_i p(R,\Omega,t)\right] + \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 p(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
 \end{align*}
 Let $F^l_{m,n,i,j,k}[p]$ be the Fourier coefficient of the probability density, then it satisfies the following ordinary different equation
-\begin{align*}
-	\frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} = &-\sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha (\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3)_\alpha p] \right] \\
+\begin{align} \label{eqn:FP Fourier}
+	\frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} = &-\sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha (\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3)_\alpha p] \right] \nonumber \\
 	&+ \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^l_{m,n,i,j,k}\left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right].
+\end{align}
+
+\section{Marginal Density}
+
+\begin{lemma} \label{lemma:marginal Fourier}
+	Let $f(R,x)\in\mathcal{L}^2(\SO\times\real^N)$, and $F^l_{m,n,\mathcal{J}}$ be its Fourier coefficients, where $\mathcal{J} = \{j_1,\ldots,j_N\} \in \mathcal{N}^N$.
+	Also, let $\tilde{f}(x) = \int_{R\in\SO} f(R,x) \diff{R}$, and $\tilde{F}_\mathcal{J}$ be its Fourier coefficients.
+	Then
+	\begin{align}
+		\tilde{F}_{\mathcal{J}} = \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) F^l_{m,n,\mathcal{J}} \int_{R\in\SO} D^l_{m,n}(R) \diff{R}.
+	\end{align}
+\end{lemma}
+\begin{proof}
+	First, $f(R,x)$ can be expanded as
+	\begin{align*}
+		f(R,x) = \sum_{l=0}^\infty \sum_{m,n=-l}^l \sum_{j'_1,\ldots,j'_N=-\infty}^\infty (2l+1) F^l_{m,n,\mathcal{J}'} D^l_{m,n}(R) \exp\left( \frac{2\pi i}{L} \sum_{\alpha=1}^N j'_\alpha x_\alpha \right).
+	\end{align*}
+	So we have
+	\begin{align*}
+		\tilde{F}_\mathcal{J} &= \frac{1}{L^N} \int_{x\in[-L/2,L/2]^N} \int_{R\in\SO} f(R,x) \diff{R} \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \\
+		&= \frac{1}{L^N} \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \bigg[ \int_{x\in[-L/2,L/2]^N}  \exp\left( \frac{2\pi i}{L} \sum_{\alpha=1}^N j'_\alpha x_\alpha \right) \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \\
+		&\qquad\qquad \times \int_{R\in\SO} \sum_{l=0}^{\infty} \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} D^l_{m,n}(R) \diff{R} \bigg] \\
+		&= \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \delta_\mathcal{J}^{\mathcal{J}'} \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} \int_{R\in\SO} D^l_{m,n}(R) \diff{R},
+	\end{align*}
+	which finishes the proof.
+\end{proof}
+
+Let $p(\Omega,t) = \int_{R\in\SO}p(R,\Omega,t)\diff{R}$ be the marginal density of $\Omega$, and denote $F_{i,j,k}[p](t)$ as its Fourier coefficient.
+Then using Lemma \ref{lemma:marginal Fourier}, $F_{i,j,k}[p](t)$ satisfied the ordinary differential equation
+\begin{align} \label{eqn:FP marginal Fourier}
+	\frac{\diff{F_{i,j,k}[p]}}{\diff{t}} = \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} \int_{R\in\SO} D^l_{m,n} \diff{R}.
+\end{align}
+Now let us calculate $\frac{\diff{F_{i,j,k}[p]}}{\diff{t}}$ by substituting \eqref{eqn:FP Fourier} into \eqref{eqn:FP marginal Fourier}.
+First, the first term on the right hand side of \eqref{eqn:FP Fourier} is
+\begin{align*}
+	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha(\Omega_\alpha p)] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
+	= &\sum_{\alpha=1}^3 F_{i,j,k}\left[ \int_{R\in\SO} \liediff_\alpha(\Omega_\alpha p) \diff{R} \right] = 0,
 \end{align*}
+where the last equality comes the from the following lemma
+\begin{lemma}
+	Let $f\in C^1(\SO)$, then $\int_{R\in\SO} \liediff_i f \diff{R} = 0$ for $i=1,2,3$.
+\end{lemma}
+\begin{proof}
+	It suffices to check the following:
+	\begin{align*}
+		\int_{R\in\SO} \liediff_i f\diff{R} &= \int_{R\in\SO} \frac{\diff{}}{\diff{t}} \bigg\lvert_{t=0} f(R\exp(t\hat{e}_i)) \diff{R} \\
+		&= \lim\limits_{t\to 0} \int_{R\in\SO} f(R\exp(t\hat{e}_i)) \diff{R} - \int_{R\in\SO} f(R) \diff{R} = 0.
+	\end{align*}
+\end{proof}
+Next, the first part of the second term on the right hand side of \eqref{eqn:FP Fourier} is
+\begin{align*}
+	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(R,\Omega,t)] \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
+	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(R,\Omega,t)] \diff{R} \right] \\
+	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(\Omega,t)] \right].
+\end{align*}
+Similarly, the third term on the right hand side of \eqref{eqn:FP Fourier} is
+\begin{align*}
+	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^l_{m,n,i,j,k} \left[ \frac{\partial^2 p(R,\Omega,t)}{\partial\Omega_\alpha \partial\Omega_\beta} \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
+	= &\sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \frac{\partial^2 p(\Omega,t)}{\partial\Omega_\alpha \partial\Omega_\beta} \right].
+\end{align*}
+The second part of the second term on the right hand side of \eqref{eqn:FP Fourier} is
+\begin{align*}
+	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(mg\rho\times R^Te_3)_\alpha p(R,\Omega,t)] \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
+	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial}{\partial\Omega_\alpha} [(mg\rho\times R^Te_3)_\alpha p(R,\Omega,t)] \diff{R} \right] \\
+	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} \right].
+\end{align*}
+
+In conclusion, \eqref{eqn:FP marginal Fourier} becomes
+\begin{align}
+	\frac{\diff F_{i,j,k}[p]}{\diff{t}} &= \sum_{\alpha=1}^3 F_{i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p] \right] + \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right] \nonumber \\
+	&\qquad\qquad + \sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} \right].
+\end{align}
+This equation is hard to solve, even numerically, unless we can write the third term on the right hand side as functions of $F_{i,j,k}[p(\Omega,t)]$.
+More specifically, it would be nice we can find a closed form function $\mathcal{F}$ such that
+\begin{align}
+	\int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} =  \mathcal{F}\left( \int_{R\in\SO} p(R,\Omega,t) \diff{R} \right).
+\end{align}
+I'm not entirely pessimistic about finding $\mathcal{F}$, since if we assume $p(R,\Omega,t) = \exp(\tr{f(\Omega)R^T})$ where $f:\real^3\to\real^{3\times 3}$ is a linear map, then this is equivalent to finding the expectation of $R$, and we already know that
+\begin{align*}
+	\int_{R\in\SO} R_{ij} \exp(\tr{f(\Omega)R^T}) \diff{R} = \sum_{\alpha=1}^{3} a_{\alpha} \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} \exp(\tr{f(\Omega)R^T}) \diff{R}.
+\end{align*}
+
 
 \end{document}
 

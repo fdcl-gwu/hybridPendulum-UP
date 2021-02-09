@@ -151,6 +151,10 @@ for i = 1:3
     OJO(:,:,:,i) = fftn(ojo(i,:,:,:));
 end
 
+if isreal(OJO)
+    OJO = complex(OJO,OJO);
+end
+
 clear ojo;
 
 % Fourier transform of M(R)
@@ -183,7 +187,7 @@ end
 clear mR F1;
 
 % initial conditions
-S = diag([4,4,4]);
+S = diag([10,10,10]);
 U = expRot([pi*2/3,0,0]);
 Miu = [0;0;0];
 Sigma = 1^2*eye(3);
@@ -225,6 +229,8 @@ end
 
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,precision);
 for nt = 1:Nt-1
+    tic;
+    
     % forward
     F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,precision);
     for k = 1:2*BR
@@ -243,7 +249,6 @@ for nt = 1:Nt-1
     end
     
     % propagating Fourier coefficients
-    tic;
     if use_mex
         if FP == 32
             F = pendulum_propagate32(F,X,OJO,MR,1/sf,L,u,CG,method);
@@ -253,7 +258,6 @@ for nt = 1:Nt-1
     else
         F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method,precision);
     end
-    toc;
     
     % backward
     F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx,precision);
@@ -278,6 +282,12 @@ for nt = 1:Nt-1
         f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
     end
     
+    fmin = min(f);
+    if fmin<0
+        f(f<-1.01*fmin) = 0;
+    end
+    f = f/(sum(f.*w,'all')*(L/2/Bx)^3);
+    
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
         = get_stat(double(f),double(R),double(x),double(w));
@@ -285,6 +295,8 @@ for nt = 1:Nt-1
     if saveToFile
         save(strcat(path,'\f',num2str(nt+1)),'f');
     end
+    
+    toc;
 end
 
 stat.ER = ER;
@@ -439,16 +451,13 @@ for l = 0:lmax
                     CG_n = reshape(CG{l1+1,l2+1}(:,col_n),2*l2+1,2*l1+1);
                     
                     temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp1(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,1)), CG_n),[1,2]);
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*(CG_m.'*MR(ind2,ind2,l2+1,1)*CG_n),[1,2]);
 
                     temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp2(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,2)), CG_n),[1,2]);
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*(CG_m.'*MR(ind2,ind2,l2+1,2)*CG_n),[1,2]);
                     
                     temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) = temp3(m+lmax+1,n+lmax+1,l+1,:,:,:) + ...
-                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*pagefun(@mtimes, pagefun(@mtimes, CG_m.',...
-                        MR(ind2,ind2,l2+1,3)), CG_n),[1,2]);
+                        cl*sum(F(ind1,ind1,l1+1,:,:,:).*(CG_m.'*MR(ind2,ind2,l2+1,3)*CG_n),[1,2]);
                 end
             end
         end
