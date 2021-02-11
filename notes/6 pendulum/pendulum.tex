@@ -51,8 +51,8 @@ Let $F^l_{m,n,i,j,k}[p]$ be the Fourier coefficient of the probability density, 
 	Let $f(R,x)\in\mathcal{L}^2(\SO\times\real^N)$, and $F^l_{m,n,\mathcal{J}}$ be its Fourier coefficients, where $\mathcal{J} = \{j_1,\ldots,j_N\} \in \mathcal{N}^N$.
 	Also, let $\tilde{f}(x) = \int_{R\in\SO} f(R,x) \diff{R}$, and $\tilde{F}_\mathcal{J}$ be its Fourier coefficients.
 	Then
-	\begin{align}
-		\tilde{F}_{\mathcal{J}} = \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) F^l_{m,n,\mathcal{J}} \int_{R\in\SO} D^l_{m,n}(R) \diff{R}.
+	\begin{align} \label{eqn:F_J}
+		\tilde{F}_{\mathcal{J}} = F^0_{0,0,\mathcal{J}}.
 	\end{align}
 \end{lemma}
 \begin{proof}
@@ -61,26 +61,35 @@ Let $F^l_{m,n,i,j,k}[p]$ be the Fourier coefficient of the probability density, 
 		f(R,x) = \sum_{l=0}^\infty \sum_{m,n=-l}^l \sum_{j'_1,\ldots,j'_N=-\infty}^\infty (2l+1) F^l_{m,n,\mathcal{J}'} D^l_{m,n}(R) \exp\left( \frac{2\pi i}{L} \sum_{\alpha=1}^N j'_\alpha x_\alpha \right).
 	\end{align*}
 	So we have
+	\begin{align} \label{eqn:F_J calculation}
+		\tilde{F}_\mathcal{J} &= \frac{1}{L^N} \int_{x\in[-L/2,L/2]^N} \int_{R\in\SO} f(R,x) \diff{R} \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \nonumber \\
+		&= \frac{1}{L^N} \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \bigg[ \int_{x\in[-L/2,L/2]^N}  \exp\left( \frac{2\pi i}{L} \sum_{\alpha=1}^N j'_\alpha x_\alpha \right) \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \nonumber \\
+		&\qquad\qquad \times \int_{R\in\SO} \sum_{l=0}^{\infty} \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} D^l_{m,n}(R) \diff{R} \bigg] \nonumber \\
+		&= \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \delta_\mathcal{J}^{\mathcal{J}'} \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} \int_{R\in\SO} D^l_{m,n}(R) \diff{R}.
+	\end{align}
+	Next, the integral of $D^l_{m,n}(R)$ can be directly calculated as
 	\begin{align*}
-		\tilde{F}_\mathcal{J} &= \frac{1}{L^N} \int_{x\in[-L/2,L/2]^N} \int_{R\in\SO} f(R,x) \diff{R} \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \\
-		&= \frac{1}{L^N} \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \bigg[ \int_{x\in[-L/2,L/2]^N}  \exp\left( \frac{2\pi i}{L} \sum_{\alpha=1}^N j'_\alpha x_\alpha \right) \exp\left( -\frac{2\pi i}{L} \sum_{\alpha=1}^N j_\alpha x_\alpha \right) \diff{x} \\
-		&\qquad\qquad \times \int_{R\in\SO} \sum_{l=0}^{\infty} \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} D^l_{m,n}(R) \diff{R} \bigg] \\
-		&= \sum_{j'_1,\ldots,j'_N=-\infty}^\infty \delta_\mathcal{J}^{\mathcal{J}'} \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1)F^l_{m,n,\mathcal{J}'} \int_{R\in\SO} D^l_{m,n}(R) \diff{R},
+		\int_{R\in\SO} D^l_{m,n}(R) \diff{R} &= \frac{1}{8\pi^2} \int_0^{2\pi} \int_0^\pi \int_0^{2\pi} e^{-im\alpha} d^l_{m,n}(\beta) e^{-in\gamma} \sin\beta \diff{\alpha} \diff{\beta} \diff{\gamma} \\
+		&= \frac{1}{2} \delta_m^0 \delta_n^0 \int_0^\pi d^l_{0,0}(\beta) \sin\beta \diff{\beta} = \frac{1}{2} \delta_m^0 \delta_n^0 \int_0^\pi P_l(\cos\beta) \sin\beta \diff{\beta} = \delta_m^0 \delta_n^0 \delta_l^0.
 	\end{align*}
-	which finishes the proof.
+	Thus, \eqref{eqn:F_J calculation} reduces to \eqref{eqn:F_J}.
 \end{proof}
 
 Let $p(\Omega,t) = \int_{R\in\SO}p(R,\Omega,t)\diff{R}$ be the marginal density of $\Omega$, and denote $F_{i,j,k}[p](t)$ as its Fourier coefficient.
 Then using Lemma \ref{lemma:marginal Fourier}, $F_{i,j,k}[p](t)$ satisfied the ordinary differential equation
 \begin{align} \label{eqn:FP marginal Fourier}
-	\frac{\diff{F_{i,j,k}[p]}}{\diff{t}} = \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} \int_{R\in\SO} D^l_{m,n} \diff{R}.
+	\frac{\diff{F_{i,j,k}[p]}}{\diff{t}} =  \frac{\diff{F^0_{0,0,i,j,k}[p]}}{\diff{t}}.
 \end{align}
 Now let us calculate $\frac{\diff{F_{i,j,k}[p]}}{\diff{t}}$ by substituting \eqref{eqn:FP Fourier} into \eqref{eqn:FP marginal Fourier}.
 First, the first term on the right hand side of \eqref{eqn:FP Fourier} is
-\begin{align*}
-	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha(\Omega_\alpha p)] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
-	= &\sum_{\alpha=1}^3 F_{i,j,k}\left[ \int_{R\in\SO} \liediff_\alpha(\Omega_\alpha p) \diff{R} \right] = 0,
-\end{align*}
+\begin{align} \label{eqn:dF marginal}
+	\frac{\diff{F^0_{0,0,i,j,k}[p]}}{\diff{t}} &= -\sum_{\alpha=1}^3 F^0_{0,0,i,j,k}[\liediff_\alpha(\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^0_{0,0,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3)_\alpha p] \right] \nonumber \\
+	&\qquad\qquad +\sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^0_{0,0,i,j,k}\left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right] \nonumber \\
+	&= -\sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \liediff_\alpha(\Omega_\alpha p(R,\Omega,t)) \diff{R} \right] + \sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega)_\alpha p(R,\Omega,t)] \diff{R} \right] \nonumber \\
+	&\qquad\qquad + \sum_{\alpha=1}^3 F^0_{0,0,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(mg\rho\times R^Te_3)_\alpha p] \right] + \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial^2 p(R,\Omega,t)}{\partial\Omega_\alpha \partial \Omega_\beta} \diff{R} \right] \nonumber \\
+	&= -\sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial \Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(\Omega,t)] \right] + \sum_{\alpha=1}^3 F^0_{0,0,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(mg\rho\times R^Te_3)_\alpha p(R,\Omega,t)] \right] \nonumber \\
+	&\qquad\qquad + \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \frac{\partial^2 p(\Omega,t)}{\partial \Omega_\alpha \partial \Omega_\beta} \right].
+\end{align}
 where the last equality comes the from the following lemma
 \begin{lemma}
 	Let $f\in C^1(\SO)$, then $\int_{R\in\SO} \liediff_i f \diff{R} = 0$ for $i=1,2,3$.
@@ -92,39 +101,58 @@ where the last equality comes the from the following lemma
 		&= \lim\limits_{t\to 0} \int_{R\in\SO} f(R\exp(t\hat{e}_i)) \diff{R} - \int_{R\in\SO} f(R) \diff{R} = 0.
 	\end{align*}
 \end{proof}
-Next, the first part of the second term on the right hand side of \eqref{eqn:FP Fourier} is
+
+Unfortunately, the second term on the right hand side of \eqref{eqn:dF marginal} cannot be written in terms of $F_{i,j,k}[p(\Omega,t)]$.
+But it can be simplified using \eqref{eqn:F_J calculation} without resorting to the product rule of Fourier transform on $\SO$.
+By Lemma \ref{lemma:marginal Fourier} and \eqref{eqn:F_J calculation}, we have
 \begin{align*}
-	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(R,\Omega,t)] \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
-	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(R,\Omega,t)] \diff{R} \right] \\
-	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p(\Omega,t)] \right].
+	F^0_{0,0,i,j,k}[R_{ab}p(R,\Omega,t)] &= F_{i,j,k}\left[ \int_{R\in\SO} R_{ab}p(R,\Omega,t) \diff{R} \right] \\
+	&= \sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) F^l_{m,n,i,j,k}[p(R,\Omega,t)] \int_{R\in\SO} R_{ab}D^l_{m,n}(R) \diff{R}.
 \end{align*}
-Similarly, the third term on the right hand side of \eqref{eqn:FP Fourier} is
+Using Euler angles (body-fixed 3-2-3), $R$ can be written as
+\begin{align}
+	R(\alpha,\beta,\gamma) = \begin{bmatrix}
+		\cos\alpha\cos\beta\cos\gamma-\sin\alpha\sin\gamma & -\cos\alpha\cos\beta\sin\gamma-\sin\alpha\cos\gamma & \cos\alpha\sin\beta \\
+		\sin\alpha\cos\beta\cos\gamma+\cos\alpha\sin\gamma & -\sin\alpha\cos\beta\sin\gamma+\cos\alpha\cos\gamma & \sin\alpha\sin\beta \\
+		-\sin\beta\cos\gamma & \sin\beta\sin\gamma & \cos\beta
+	\end{bmatrix}.
+\end{align}
+Note that $\int_0^{2\pi}\sin\alpha e^{-im\alpha} \diff{\alpha} = 2\pi\left( \frac{i}{2}\delta_m^{-1} - \frac{i}{2}\delta_m^1 \right)$, and $\int_0^{2\pi}\cos\alpha e^{-im\alpha} \diff{\alpha} = 2\pi\left( \frac{1}{2}\delta_m^{-1} + \frac{1}{2}\delta_m^1 \right)$.
+So we have the following explicit calculations
 \begin{align*}
-	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^l_{m,n,i,j,k} \left[ \frac{\partial^2 p(R,\Omega,t)}{\partial\Omega_\alpha \partial\Omega_\beta} \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
-	= &\sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \frac{\partial^2 p(\Omega,t)}{\partial\Omega_\alpha \partial\Omega_\beta} \right].
-\end{align*}
-The second part of the second term on the right hand side of \eqref{eqn:FP Fourier} is
-\begin{align*}
-	&\sum_{l=0}^\infty \sum_{m,n=-l}^l (2l+1) \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(mg\rho\times R^Te_3)_\alpha p(R,\Omega,t)] \right] \int_{R\in\SO} D^l_{m,n}(R) \diff{R} \\
-	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \int_{R\in\SO} \frac{\partial}{\partial\Omega_\alpha} [(mg\rho\times R^Te_3)_\alpha p(R,\Omega,t)] \diff{R} \right] \\
-	= &\sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} \right].
+	\int_{R\in\SO} R_{11}D^l_{m,n}(R) \diff{R} &= \frac{1}{4} \int_0^\pi \left( \left(d^l_{1,1}(\beta) + d^l_{1,-1}(\beta)\right)\cos\beta + d^l_{1,1}(\beta) - d^l_{1,-1}(\beta) \right) \sin\beta \diff{\beta}  \\
+	\int_{R\in\SO} R_{12}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{13}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{21}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{22}D^l_{m,n}(R) \diff{R} &= \frac{1}{4} \int_0^\pi \left( \left(d^l_{1,1}(\beta) - d^l_{1,-1}(\beta)\right)\cos\beta + d^l_{1,1}(\beta) + d^l_{1,-1}(\beta) \right) \sin\beta \diff{\beta} \\
+	\int_{R\in\SO} R_{23}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{31}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{32}D^l_{m,n}(R) \diff{R} &= 0 \\
+	\int_{R\in\SO} R_{33}D^l_{m,n}(R) \diff{R} &= \frac{1}{2} \int_0^\pi P_l(\cos\beta) \cos\beta \sin\beta \diff{R}.
 \end{align*}
 
-In conclusion, \eqref{eqn:FP marginal Fourier} becomes
-\begin{align}
-	\frac{\diff F_{i,j,k}[p]}{\diff{t}} &= \sum_{\alpha=1}^3 F_{i,j,k}\left[ \frac{\partial}{\partial\Omega_\alpha} [(\Omega\times J\Omega)_\alpha p] \right] + \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F_{i,j,k} \left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right] \nonumber \\
-	&\qquad\qquad + \sum_{\alpha=1}^3 F_{i,j,k} \left[ \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} \right].
-\end{align}
-This equation is hard to solve, even numerically, unless we can write the third term on the right hand side as functions of $F_{i,j,k}[p(\Omega,t)]$.
-More specifically, it would be nice we can find a closed form function $\mathcal{F}$ such that
-\begin{align}
-	\int_{R\in\SO} (mg\rho\times R^Te_3)_\alpha p(R,\Omega,t) \diff{R} =  \mathcal{F}\left( \int_{R\in\SO} p(R,\Omega,t) \diff{R} \right).
-\end{align}
-I'm not entirely pessimistic about finding $\mathcal{F}$, since if we assume $p(R,\Omega,t) = \exp(\tr{f(\Omega)R^T})$ where $f:\real^3\to\real^{3\times 3}$ is a linear map, then this is equivalent to finding the expectation of $R$, and we already know that
-\begin{align*}
-	\int_{R\in\SO} R_{ij} \exp(\tr{f(\Omega)R^T}) \diff{R} = \sum_{\alpha=1}^{3} a_{\alpha} \frac{\partial}{\partial\Omega_\alpha} \int_{R\in\SO} \exp(\tr{f(\Omega)R^T}) \diff{R}.
-\end{align*}
+\section{Conditional Density}
 
+Let $p(R,t\lvert\Omega)$ be the conditional density and $F^l_{m,n}[p](\Omega,t)$ be its Fourier coefficient.
+For any fixed $\Omega\in\real^3$, the first dynamical equation can be solved analytically as
+\begin{align*}
+	R(t+\Delta t) = R(t)\exp(\hat{\Omega}\Delta t) \triangleq R(t)\Delta R(\Omega).
+\end{align*}
+So we have the following density propagation rule
+\begin{align*}
+	p(R,t+\Delta t\lvert\Omega) = p(R\Delta R(\Omega)^T, t\lvert\Omega) \triangleq \tilde{p}(R,t\lvert\Omega).
+\end{align*}
+By lemma \ref{lemma:fixed rotation}, we have $F^l[p](\Omega,t+\Delta t) = F^l[p'](\Omega,t) = F^l[p](\Omega,t)\bar{D}^l(\Delta R(\Omega))$, which is the propagation rule for the Fourier coefficients of the marginal density.
+\begin{lemma} \label{lemma:fixed rotation}
+	Let $R'$ be a fixed rotation, then $F^l[f(RR'^T)] = F^l[f(R)]\bar{D}^l(R')$.
+\end{lemma}
+\begin{proof}
+	The Fourier coefficient of $f(RR'^T)$ can be calculated directly as
+	\begin{align*}
+		F^l[f(RR'^T)] &= \int_{R\in\SO} f(RR'^T) \bar{D}^l(R) \diff{R} = \int_{R\in\SO} f(R) \bar{D}^l(RR') \diff{R} \\
+		&= \int_{R\in\SO} f(R) \bar{D}^l(R) \diff{R} \bar{D}^l(R') = F^l[f(R)]\bar{D}^l(R').
+	\end{align*}
+\end{proof}
 
 \end{document}
 

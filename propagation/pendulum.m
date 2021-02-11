@@ -136,7 +136,7 @@ for i = 1:3
     X(:,:,:,i) = fftn(x(i,:,:,:));
 end
 
-% Fourier transform of Omega cross JOmega
+% Fourier transform of J^-1*cross(Omega,J*Omega)
 ojo = -cross(x,permute(pagefun(@mtimes,J,permute(gpuArray(x),...
     [1,5,2,3,4])),[1,3,4,5,2]));
 ojo = permute(pagefun(@mtimes,J^-1,permute(ojo,[1,5,2,3,4])),[1,3,4,5,2]);
@@ -157,7 +157,7 @@ end
 
 clear ojo;
 
-% Fourier transform of M(R)
+% Fourier transform of J^-1*M(R)
 mR = -m*g*cross(repmat(rho,1,2*BR,2*BR,2*BR),permute(R(3,:,:,:,:),[2,3,4,5,1]));
 mR = permute(pagefun(@mtimes,J^-1,permute(gpuArray(mR),[1,5,2,3,4])),[1,3,4,5,2]);
 

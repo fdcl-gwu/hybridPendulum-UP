@@ -94,10 +94,17 @@ if isDensity
                 end
             end
             
-            c = c*(2*pi/Ntheta);
+            c = c/max(c(:));
+            c1 = c(:,:,1);
+            c2 = c(:,:,2);
+            c3 = c(:,:,3);
+            c = ones(size(c));
+            c(:,:,1) = c(:,:,1)-c2-c3;
+            c(:,:,2) = c(:,:,2)-c1-c3;
+            c(:,:,3) = c(:,:,3)-c1-c2;
             
             f = figure;
-            surf(s1,s2,s3,sum(c,3),'LineStyle','none','FaceColor','interp');
+            surf(s1,s2,s3,c,'LineStyle','none','FaceColor','interp');
             
             xlim([-1,1]);
             ylim([-1,1]);
