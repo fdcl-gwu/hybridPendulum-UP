@@ -282,12 +282,6 @@ for nt = 1:Nt-1
         f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
     end
     
-    fmin = min(f);
-    if fmin<0
-        f(f<-1.01*fmin) = 0;
-    end
-    f = f/(sum(f.*w,'all')*(L/2/Bx)^3);
-    
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
         = get_stat(double(f),double(R),double(x),double(w));

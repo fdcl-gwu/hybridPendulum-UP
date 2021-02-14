@@ -153,7 +153,7 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     [5,1,2,3,4]).*Sigma^-1,[1,2])),[1,2,6,3,4,5])/c/sqrt((2*pi)^3*det(Sigma));
 
 if saveToFile
-    save(strcat(path,'\f1'),'f');
+    save(strcat(path,'\f1'),'f','-v7.3');
 end
 
 % pre-allocate memory
@@ -176,14 +176,16 @@ EvRvR = zeros(3,3,Nt);
 
 %% propagation
 for nt = 1:Nt-1
+    tic;
     f = integrate(f,d,w,CG,Dx,OJO,MR,L,1/sf);
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
     
     if saveToFile
-        save(strcat(path,'\f',num2str(nt+1)),'f');
+        save(strcat(path,'\f',num2str(nt+1)),'f','-v7.3');
     end
+    toc;
 end
 
 stat.ER = ER;
@@ -220,7 +222,6 @@ lmax = BR-1;
 const_2BR = 2*BR;
 const_2Bx = 2*Bx;
 
-tic;
 % forward Fourier transform
 F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
 for i = 1:const_2Bx
@@ -234,9 +235,7 @@ for i = 1:const_2Bx
 end
 F1 = fftshift(fftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
-toc;
 
-tic;
 F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 FR = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for l = 0:lmax
@@ -253,7 +252,6 @@ Fx = permute(F(lmax+1,lmax+1,1,:,:,:),[4,5,6,1,2,3]);
 
 fx = sum(f.*w,[1,2,3]);
 FR = FR./fx;
-toc;
 
 % calculate dFx
 dFx = zeros(2*Bx,2*Bx,2*Bx);
@@ -384,8 +382,9 @@ try
     EvR = sum(vR.*permute(w,[1,3,2]).*permute(fR,[4,1,2,3]),[2,3,4]);
     EvRvR = sum(permute(vR,[1,5,2,3,4]).*permute(vR,[5,1,2,3,4]).*...
         permute(w,[1,3,4,2]).*permute(fR,[4,5,1,2,3]),[3,4,5]);
-    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(x,[1,5,6,7,8,2,3,4]).*...
-        permute(w,[1,3,4,2]).*permute(f(:,:,:,:,:,:),[7,8,1,2,3,4,5,6]),[3,4,5,6,7,8])*(L/2/Bx)^3;
+    
+    ExvR = sum(permute(vR,[5,1,2,3,4]).*permute(w,[1,3,4,2]).*permute(f,[7,8,1,2,3,4,5,6]),[3,4,5]);
+    ExvR = sum(permute(x,[1,5,6,7,8,2,3,4]).*ExvR,[6,7,8])*(L/2/Bx)^3;
 
     covxx = Varx;
     covxvR = ExvR-Ex*EvR.';

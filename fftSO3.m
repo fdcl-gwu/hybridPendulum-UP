@@ -36,13 +36,17 @@ for j = 1:2*B
 end
 
 % function values
-f = zeros(2*B,2*B,2*B);
-for i = 1:2*B
-    for j = 1:2*B
-        for k = 1:2*B
-            f(i,j,k) = func(R(:,:,i,j,k));
+if isa(func,'function_handle')
+    f = zeros(2*B,2*B,2*B);
+    for i = 1:2*B
+        for j = 1:2*B
+            for k = 1:2*B
+                f(i,j,k) = func(R(:,:,i,j,k));
+            end
         end
     end
+else
+    f = func;
 end
 
 % Wigner_d

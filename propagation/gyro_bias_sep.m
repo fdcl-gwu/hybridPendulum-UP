@@ -1,17 +1,8 @@
-function [ stat, MFG ] = gyro_bias( use_mex, path )
-close all;
+function [ stat, MFG ] = gyro_bias_sep( path )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
 addpath('..');
-
-if ~exist('use_mex','var') || isempty(use_mex)
-    use_mex = false;
-end
-
-if use_mex
-    addpath('mex');
-end
 
 if exist('path','var') && ~isempty(path)
     saveToFile = true;
@@ -26,7 +17,7 @@ Nt = T*sf+1;
 
 % band limit
 BR = 10;
-Bx = 15;
+Bx = 10;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -77,20 +68,21 @@ for j = 1:2*BR
     d(:,:,:,j) = Wigner_d(beta(j),lmax);
 end
 
-% derivatives
-u = getu(lmax);
-if ~use_mex
-    u = gpuArray(u);
-end
-
-% Fourier transform of x
-X = zeros(2*Bx,2*Bx,2*Bx,3);
-for i = 1:3
-    X(:,:,:,i) = fftn(x(i,:,:,:));
-end
-
-if ~use_mex
-    X = gpuArray(X);
+% D(exp(x))
+Dx = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            e = rot2eul(expRot(x(:,i,j,k)/sf),'zyz');
+            dijk = Wigner_d(e(2),lmax);
+            
+            for l = 0:lmax
+                ind = -l+lmax+1:l+lmax+1;
+                Dx(ind,ind,l+1,i,j,k) = dijk(ind,ind,l+1).*...
+                    exp(-1i*e(1)*(-l:l)).'.*exp(-1i*e(3)*(-l:l));
+            end
+        end
+    end
 end
 
 % initial condition
@@ -132,151 +124,149 @@ ExvR = zeros(3,3,Nt);
 EvRvR = zeros(3,3,Nt);
 
 [ER(:,:,1),Ex(:,1),Varx(:,:,1),EvR(:,1),ExvR(:,:,1),EvRvR(:,:,1),...
-    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)]...
-    = get_stat(double(f),double(R),double(x),double(w));
+    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f,R,x,w);
 
 %% propagation
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
 for nt = 1:Nt-1
     tic;
-    
-    % forward
-    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
-    for k = 1:2*BR
-        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
-    end
-    F1 = fftshift(fftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
-
-    for l = 0:lmax
-        for m = -l:l
-            for n = -l:l
-                F(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
-                    permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
-            end
-        end
-    end
-    
-    % propagating Fourier coefficients
-    if use_mex
-        F = gyrobias_propagate(F,X,1/sf,u,G1,G2);
-    else
-        F = integrate(F,X,1/sf,u,G1,G2);
-    end
-    
-    % backward
-    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
-    for m = -lmax:lmax
-        for n = -lmax:lmax
-            lmin = max(abs(m),abs(n));
-            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
-
-            for k = 1:2*BR
-                d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
-                F1(m+lmax+1,k,n+lmax+1,:,:,:) = sum((2*permute(lmin:lmax,...
-                    [1,3,2])+1).*F_mn.*d_jk_betak,3);
-            end
-        end
-    end
-
-    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
-    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
-    F1 = ifftshift(ifftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
-    for k = 1:2*BR
-        f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:),'symmetric')*(2*BR)^2;
-    end
+    f = integrate(f,d,w,Dx,G2,L,1/sf);
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
-        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
-        = get_stat(double(f),double(R),double(x),double(w));
+        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)] = get_stat(f,R,x,w);
     
     if saveToFile
-        save(strcat(path,'\f',num2str(nt+1)),'f');
+        save(strcat(path,'\f',num2str(nt+1)),'f','-v7.3');
     end
-    
     toc;
 end
 
+stat.ER = ER;
+stat.Ex = Ex;
+stat.Varx = Varx;
+stat.EvR = EvR;
+stat.ExvR = ExvR;
+stat.EvRvR = EvRvR;
 
+MFG.U = U;
+MFG.S = S;
+MFG.V = V;
+MFG.Miu = Miu;
+MFG.Sigma = Sigma;
+MFG.P = P;
+
+if saveToFile
+    save(strcat(path,'\stat'),'stat');
+    save(strcat(path,'\MFG'),'MFG');
+end
 
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');
 rmpath('..');
-if use_mex
-    addpath('mex');
-end
 
 end
 
 
-function [ Fnew ] = integrate( Fold, X, dt, u, G1, G2 )
+function [ f ] = integrate( f, d, w, Dx, G2, L, dt )
 
-BR = size(Fold,3);
-Bx = size(Fold,4)/2;
+BR = size(f,1)/2;
+Bx = size(f,4)/2;
 lmax = BR-1;
 
-Fold = gpuArray(Fold);
+% forward Fourier transform
+F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            for l = 1:2*BR
+                F1(:,l,:,i,j,k) = fftn(f(:,l,:,i,j,k));
+            end
+        end
+    end
+end
+F1 = fftshift(fftshift(F1,1),3);
+F1 = flip(flip(F1,1),3);
 
-% gyro bias
-temp1 = zeros(size(Fold));
-temp2 = zeros(size(Fold));
-temp3 = zeros(size(Fold));
-for ix = 1:2*Bx
-    for jx = 1:2*Bx
-        for kx = 1:2*Bx
-            X_ijk = flip(flip(flip(X,1),2),3);
-            X_ijk = circshift(X_ijk,ix,1);
-            X_ijk = circshift(X_ijk,jx,2);
-            X_ijk = circshift(X_ijk,kx,3);
-            X_ijk = permute(X_ijk,[5,6,7,1,2,3,4]);
-            
-            temp1(:,:,:,ix,jx,kx) = gather(sum(X_ijk(:,:,:,:,:,:,1).*Fold,[4,5,6])/(2*Bx)^3);
-            temp2(:,:,:,ix,jx,kx) = gather(sum(X_ijk(:,:,:,:,:,:,2).*Fold,[4,5,6])/(2*Bx)^3);
-            temp3(:,:,:,ix,jx,kx) = gather(sum(X_ijk(:,:,:,:,:,:,3).*Fold,[4,5,6])/(2*Bx)^3);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+FR = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+for l = 0:lmax
+    for m = -l:l
+        for n = -l:l
+            FR(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
+            F(m+lmax+1,n+lmax+1,l+1,:,:,:) = fftn(FR(m+lmax+1,n+lmax+1,l+1,:,:,:));
         end
     end
 end
 
-dF1 = gpuArray.zeros(size(Fold));
-for l = 0:lmax
-    indmn = -l+lmax+1:l+lmax+1;
-    dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,ix,jx,kx)-...
-        pagefun(@mtimes,gpuArray(temp1(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,1).')-...
-        pagefun(@mtimes,gpuArray(temp2(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,2).')-...
-        pagefun(@mtimes,gpuArray(temp3(indmn,indmn,l+1,:,:,:)),u(indmn,indmn,l+1,3).');
-end
+Fx = permute(F(lmax+1,lmax+1,1,:,:,:),[4,5,6,1,2,3]);
 
-clear temp1 temp2 temp3
+fx = sum(f.*w);
+FR = FR./fx;
 
-% gyro random walk
-for l = 0:lmax
-    indmn = -l+lmax+1:l+lmax+1;
-    for i = 1:3
-        for j = 1:3
-            dF1(indmn,indmn,l+1,:,:,:) = dF1(indmn,indmn,l+1,:,:,:) + ...
-                G1(i,j)*pagefun(@mtimes,pagefun(@mtimes,Fold(indmn,indmn,l+1,:,:,:),...
-                u(indmn,indmn,l+1,i).'),u(indmn,indmn,l+1,j).');
-        end
-    end
-end
-
-% bias randomwalk
+% calculate dFx
+dFx = zeros(2*Bx,2*Bx,2*Bx);
 for i = 1:3
     for j = 1:3
         if i==j
-            c = pi^2*[0:Bx-1,-Bx:-1].^2;
-            c = -shiftdim(c,-(i+1));
+            c = 4*pi^2*[0:Bx-1,-Bx:-1].^2/L^2;
+            c = -shiftdim(c,2-i);
         else
-            c = pi*[0:Bx-1,0,-Bx+1:-1];
-            c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
+            c = 2*pi*[0:Bx-1,0,-Bx+1:-1]/L;
+            c = -shiftdim(c,2-i).*shiftdim(c,2-j);
         end
         
-        dF1 = dF1 + G2(i,j)*Fold.*c;
+        dFx = dFx + G2(i,j)*Fx.*c;
     end
 end
 
-Fnew = gather(Fold+dF1*dt);
+% integrate
+Fx = Fx + dFx*dt;
+
+% backward Fourier transform for fx
+fx = ifftn(Fx,'symmetric');
+
+% calculated rotated FR
+FR_r = zeros(size(FR));
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            for l = 0:lmax
+                ind = -l+lmax+1:l+lmax+1;
+                FR_r(ind,ind,l+1,i,j,k) = FR(ind,ind,l+1,i,j,k)*conj(Dx(ind,ind,l+1,i,j,k));
+            end
+        end
+    end
+end
+
+% backward Fourier transfomr for rotated FR
+F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
+for m = -lmax:lmax
+    for n = -lmax:lmax
+        lmin = max(abs(m),abs(n));
+        F_mn = FR_r(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:,:);
+        
+        for k = 1:2*BR
+            d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
+            F1(m+lmax+1,k,n+lmax+1,:,:,:) = sum((2*permute(lmin:lmax,...
+                [1,3,2])+1).*F_mn.*d_jk_betak,3);
+        end
+    end
+end
+
+F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
+F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
+F1 = ifftshift(ifftshift(F1,1),3);
+F1 = flip(flip(F1,1),3);
+
+for i = 1:2*Bx
+    for j = 1:2*Bx
+        for k = 1:2*Bx
+            for l = 1:2*BR
+                f(:,l,:,i,j,k) = ifftn(F1(:,l,:,i,j,k),'symmetric')*(2*BR)^2*fx(i,j,k);
+            end
+        end
+    end
+end
 
 end
 
