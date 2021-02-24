@@ -7,10 +7,12 @@ addpath('..\rotation3d');
 if (size(varargin{1},1)==3 && size(varargin{1},2)==3)
     isDensity = false;
     R = varargin{1};
+    sf = varargin{2};
 else
     isDensity = true;
     path = varargin{1};
     L = varargin{2};
+    sf = varargin{3};
 end
 
 if isDensity
@@ -112,7 +114,7 @@ if isDensity
             view([1,-1,0]);
             axis equal;
             
-            annotation('textbox','String',strcat('time: ',num2str((nt-1)/100),' s'),'Position',[0.15,0.75,0.16,0.07]);
+            annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.75,0.16,0.07]);
 
             M(nt) = getframe;
             close(f);
@@ -131,15 +133,19 @@ else
         zlim([-1,1]);
         view([1,1,0]);
 
-        annotation('textbox','String',strcat('time: ',num2str((nt-1)/100),' s'),'Position',[0.15,0.85,0.16,0.07]);
+        annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.85,0.16,0.07]);
 
         M(nt) = getframe;
         close(f);
     end
 end
 
-v = VideoWriter('R1.avi');
-v.FrameRate = 100;
+if isDensity
+    v = VideoWriter(strcat(path,'\R1.avi'));
+else
+    v = VideoWriter('R1.avi');
+end
+v.FrameRate = sf;
 v.Quality = 100;
 open(v);
 writeVideo(v,M);

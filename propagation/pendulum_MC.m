@@ -6,16 +6,15 @@ addpath('../rotation3d');
 Ns = 1000000;
 
 % parameters
-Jd = diag([1,2,3]);
-J = trace(Jd)*eye(3)-Jd;
+J = diag([0.0152492,0.0142639,0.00380233]);
 
-rho = [0;0;1];
-m = 10;
+rho = [0;0;0.0679878];
+m = 1.85480;
 g = 3;
 
 % time
-sf = 100;
-T = 1;
+sf = 200;
+T = 2;
 Nt = T*sf+1;
 
 % initial conditions

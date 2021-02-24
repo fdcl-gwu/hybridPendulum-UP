@@ -39,16 +39,15 @@ else
 end
 
 % time
-sf = 100;
-T = 1;
+sf = 200;
+T = 2;
 Nt = T*sf+1;
 
 % parameters
-Jd = diag([1,2,3]);
-J = trace(Jd)*eye(3)-Jd;
+J = diag([0.0152492,0.0142639,0.00380233]);
 
-rho = [0;0;1];
-m = 10;
+rho = [0;0;0.0679878];
+m = 1.85480;
 g = 3;
 
 % band limit
@@ -82,7 +81,7 @@ for i = 1:2*BR
 end
 
 % grid over R^3
-L = 10;
+L = 16;
 x = zeros(3,2*Bx,2*Bx,2*Bx,precision);
 for i = 1:2*Bx
     for j = 1:2*Bx
@@ -186,6 +185,19 @@ for i = 1:3
 end
 clear mR F1;
 
+% damping
+b = 0;
+if FP == 32
+    b = single(b);
+end
+
+% noise
+H = eye(3)*0;
+G = 0.5*(H*H.');
+if FP == 32
+    G = single(G);
+end
+
 % initial conditions
 S = diag([10,10,10]);
 U = expRot([pi*2/3,0,0]);
@@ -251,12 +263,12 @@ for nt = 1:Nt-1
     % propagating Fourier coefficients
     if use_mex
         if FP == 32
-            F = pendulum_propagate32(F,X,OJO,MR,1/sf,L,u,CG,method);
+            F = pendulum_propagate32(F,X,OJO,MR,b,G,1/sf,L,u,CG,method);
         elseif FP == 64
-            F = pendulum_propagate(F,X,OJO,MR,1/sf,L,u,CG,method);
+            F = pendulum_propagate(F,X,OJO,MR,b,G,1/sf,L,u,CG,method);
         end
     else
-        F = integrate(F,X,OJO,MR,1/sf,L,u,CG,method,precision);
+        F = integrate(F,X,OJO,MR,b,G,1/sf,L,u,CG,method,precision);
     end
     
     % backward
@@ -322,10 +334,10 @@ end
 end
 
 
-function [ Fnew ] = integrate( Fold, X, OJO, MR, dt, L, u, CG, method, precision )
+function [ Fnew ] = integrate( Fold, X, OJO, MR, b, G, dt, L, u, CG, method, precision )
 
 u = gpuArray(u);
-dF1 = derivative(gpuArray(Fold),X,OJO,MR,L,u,CG,precision);
+dF1 = derivative(gpuArray(Fold),X,OJO,MR,b,G,L,u,CG,precision);
 
 if strcmpi(method,'euler')
     Fnew = Fold+dt*dF1;
@@ -335,7 +347,7 @@ end
 % midpoint method, RK2 method
 if strcmpi(method,'midpoint') || strcmpi(method,'RK4')
     F2 = Fold+dF1*dt/2;
-    dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
+    dF2 = derivative(gpuArray(F2),X,OJO,MR,b,G,L,u,CG,precision);
 
     if strcmpi(method,'midpoint')
         Fnew = Fold+dt*dF2;
@@ -343,7 +355,7 @@ if strcmpi(method,'midpoint') || strcmpi(method,'RK4')
     end
 elseif strcmp(method,'RK2')
     F2 = Fold+dF1*dt;
-    dF2 = derivative(gpuArray(F2),X,OJO,MR,L,u,CG,precision);
+    dF2 = derivative(gpuArray(F2),X,OJO,MR,b,G,L,u,CG,precision);
     
     Fnew = Fold+dt/2*(dF1+dF2);
     return;
@@ -351,10 +363,10 @@ end
 
 % RK4 method
 F3 = Fold + dF2*dt/2;
-dF3 = derivative(gpuArray(F3),X,OJO,MR,L,u,CG,precision);
+dF3 = derivative(gpuArray(F3),X,OJO,MR,b,G,L,u,CG,precision);
 
 F4 = Fold + dF3*dt;
-dF4 = derivative(gpuArray(F4),X,OJO,MR,L,u,CG,precision);
+dF4 = derivative(gpuArray(F4),X,OJO,MR,b,G,L,u,CG,precision);
 
 if strcmpi(method,'RK4')
     Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
@@ -364,7 +376,7 @@ end
 end
 
 
-function [ dF ] = derivative( F, X, OJO, MR, L, u, CG, precision )
+function [ dF ] = derivative( F, X, OJO, MR, b, G, L, u, CG, precision )
 
 BR = size(F,3);
 Bx = size(F,4)/2;
@@ -400,7 +412,25 @@ for l = 0:lmax
         pagefun(@mtimes,temp3(indmn,indmn,l+1,:,:,:),u(indmn,indmn,l+1,3).');
 end
 
-clear temp1 temp2 temp3
+% b*Omega
+for ix = 1:2*Bx
+    for jx = 1:2*Bx
+        for kx = 1:2*Bx
+            bX_ijk = flip(flip(flip(-b*X,1),2),3);
+            bX_ijk = circshift(bX_ijk,ix,1);
+            bX_ijk = circshift(bX_ijk,jx,2);
+            bX_ijk = circshift(bX_ijk,kx,3);
+            bX_ijk = permute(bX_ijk,[5,6,7,1,2,3,4]);
+            
+            temp1 = sum(bX_ijk(:,:,:,:,:,:,1).*F,[4,5,6])/(2*Bx)^3;
+            temp2 = sum(bX_ijk(:,:,:,:,:,:,2).*F,[4,5,6])/(2*Bx)^3;
+            temp3 = sum(bX_ijk(:,:,:,:,:,:,3).*F,[4,5,6])/(2*Bx)^3;
+            
+            dF(:,:,:,ix,jx,kx) = dF(:,:,:,ix,jx,kx)-...
+                temp1*deriv_x(ix,Bx,L)-temp2*deriv_x(jx,Bx,L)-temp3*deriv_x(kx,Bx,L);
+        end
+    end
+end
 
 % cross(Omega,J*Omega)
 for ix = 1:2*Bx
@@ -463,6 +493,21 @@ dF = dF - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]) - ...
     temp3.*permute(c,[1,3,4,5,6,2]);
 
 clear temp1 temp2 temp3
+
+% noise
+for i = 1:3
+    for j = 1:3
+        if i==j
+            c = pi^2*[0:Bx-1,-Bx:-1].^2;
+            c = -shiftdim(c,-(i+1));
+        else
+            c = pi*[0:Bx-1,0,-Bx+1:-1];
+            c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
+        end
+        
+        dF = dF + G(i,j)*F.*c;
+    end
+end
 
 dF = gather(dF);
 
