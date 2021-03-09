@@ -118,6 +118,64 @@ __global__ void mulImg_FTot_large(myComplex* dF, const myReal* c, const int dim,
 	}
 }
 
+__global__ void get_c(myReal* c, const int i, const int j, const myReal* L, const myReal* G, const Size_F* size_F)
+{
+	if (i == j) {
+		int ix = threadIdx.x;
+		if (ix < size_F[0].Bx)
+			c[ix] = -4*PI*PI * ix*ix * G[i+3*j] / (L[0]*L[0]);
+		else
+			c[ix] = -4*PI*PI * (ix-size_F[0].const_2Bx)*(ix-size_F[0].const_2Bx) * G[i+3*j] / (L[0]*L[0]);
+	} else {
+		int ix = threadIdx.x;
+		int jx = threadIdx.y;
+
+		myReal c1;
+		if (ix < size_F[0].Bx)
+			c1 = 2*PI * ix / L[0];
+		else if (ix == size_F[0].Bx)
+			c1 = 0;
+		else
+			c1 = 2*PI * (ix-size_F[0].const_2Bx) / L[0];
+
+		myReal c2;
+		if (jx < size_F[0].Bx)
+			c2 = 2*PI * jx / L[0];
+		else if (jx == size_F[0].Bx)
+			c2 = 0;
+		else
+			c2 = 2*PI * (jx-size_F[0].const_2Bx) / L[0];
+
+		int indc = ix + jx*size_F[0].const_2Bx;
+		c[indc] = -c1*c2 * G[i+3*j];
+	}
+}
+
+__global__ void get_biasRW_small(myComplex* dF_temp, const myComplex* Fold, const myReal* c, const int i, const int j, const Size_F* size_F)
+{
+	int indR = threadIdx.x + blockIdx.x*blockDim.x;
+	if (indR < size_F[0].nR_compact) {
+		unsigned int indx = blockIdx.y;
+		int ijk[3];
+
+		ijk[2] = (int) indx / size_F[0].const_2Bxs;
+		int ijx = indx % size_F[0].const_2Bxs;
+		ijk[1] = (int) ijx / size_F[0].const_2Bx;
+		ijk[0] = ijx % size_F[0].const_2Bx;
+
+		int ind = indR + indx*size_F[0].nR_compact;
+
+		if (i==j) {
+			dF_temp[ind].x = Fold[ind].x * c[ijk[i]];
+			dF_temp[ind].y = Fold[ind].y * c[ijk[i]];
+		} else {
+			int indc = ijk[i] + ijk[j]*size_F[0].const_2Bx;
+			dF_temp[ind].x = Fold[ind].x * c[indc];
+			dF_temp[ind].y = Fold[ind].y * c[indc];
+		}
+	}
+}
+
 __global__ void integrate_Fnew(myComplex* Fnew, const myComplex* Fold, const myComplex* dF, const myReal dt, const int nTot)
 {
 	int ind = threadIdx.x + blockIdx.x*blockDim.x;
@@ -233,8 +291,8 @@ __host__ void deriv_x(myReal* c, const int n, const int B, const myReal L)
 		*c = 2*PI*(n-2*B)/L;
 }
 
-__host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR,
-	const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev)
+__host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR, const myReal* b,
+	const myReal* G, const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev)
 {
 	////////////////////////////
 	// circular_convolution X //
@@ -347,8 +405,6 @@ __host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X
 	cudaErrorHandle(cudaMemcpy(dF_dev, dF3_dev, size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
 
 	// free memory
-	cudaErrorHandle(cudaFree(X_dev));
-	cudaErrorHandle(cudaFree(X_ijk_dev));
 	cudaErrorHandle(cudaFree(u_dev));
 
 	//////////////////////////////
@@ -417,6 +473,61 @@ __host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X
 	// free memory
 	cudaErrorHandle(cudaFree(OJO_dev));
 	cudaErrorHandle(cudaFree(OJO_ijk_dev));
+
+	//////////////////////////////
+	// circular convolutions bX //
+	//////////////////////////////
+
+	// bX_ijk = flip(flip(flip(-b*X,1),2),3)
+	// bX_ijk = circshift(bX_ijk,1,i)
+	// bX_ijk = circshift(bX_ijk,2,j)
+	// bX_ijk = circshift(bX_ijk,3,k)
+	// dF{r,i,j,k,p} = Fold{r,m,n,l}.*bX_ijk{m,n,l,p}
+	// dF{r,i,j,k,p} = dF{r,i,j,k,p}*c(p)
+	// dF = sum(dF,'p')
+
+	// calculate
+	for (int i = 0; i < size_F->const_2Bx; i++) {
+		for (int j = 0; j < size_F->const_2Bx; j++) {
+			for (int k = 0; k < size_F->const_2Bx; k++) {
+				flip_shift <<<gridsize_8, blocksize_8>>> (X_dev, X_ijk_dev, i, j, k, size_F_dev);
+				cudaErrorHandle(cudaGetLastError());
+
+				cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_conv, (void*)&alpha_cutensor, F_dev, X_ijk_dev,
+					(void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize_conv, 0));
+
+				myReal c[3];
+				deriv_x(c, i, size_F->Bx, *L);
+				deriv_x(c+1, j, size_F->Bx, *L);
+				deriv_x(c+2, k, size_F->Bx, *L);
+
+				mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF_temp_dev, -c[0]*b[0], size_F->nR_compact);
+				cudaErrorHandle(cudaGetLastError());
+				mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF_temp_dev+size_F->nR_compact, -c[1]*b[1], size_F->nR_compact);
+				cudaErrorHandle(cudaGetLastError());
+				mulImg_FR <<<gridsize_512_nR, blocksize_512_nR>>> (dF_temp_dev+2*size_F->nR_compact, -c[2]*b[2], size_F->nR_compact);
+				cudaErrorHandle(cudaGetLastError());
+
+				for (int ip = 0; ip < 3; ip++) {
+					myComplex* dF3_dev_ijkp = dF3_dev + i*size_F->nR_compact + 
+						j*(size_F->nR_compact*size_F->const_2Bx) + k*(size_F->nR_compact*size_F->const_2Bxs) + ip*size_F->nTot_compact;
+					myComplex* dF_temp_dev_p = dF_temp_dev + ip*size_F->nR_compact;
+
+					cudaErrorHandle(cudaMemcpy(dF3_dev_ijkp, dF_temp_dev_p, size_F->nR_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
+				}
+			}
+		}
+	}
+
+	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F->nTot_compact);
+	cudaErrorHandle(cudaGetLastError());
+
+	add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F->nTot_compact);
+	cudaErrorHandle(cudaGetLastError());
+
+	// free memory
+	cudaErrorHandle(cudaFree(X_dev));
+	cudaErrorHandle(cudaFree(X_ijk_dev));
 	cudaErrorHandle(cudaFree(dF_temp_dev));
 	if (worksize_conv > 0)
 		cudaErrorHandle(cudaFree(work));
@@ -546,12 +657,10 @@ __host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X
 	cudaErrorHandle(cudaGetLastError());
 
 	// free memory
-	cudaErrorHandle(cudaFree(dF3_dev));
 	cudaErrorHandle(cudaFree(MR_dev));
 	cudaErrorHandle(cudaFree(FMR_dev));
 	cudaErrorHandle(cudaFree(FMR_temp_dev));
 	cudaErrorHandle(cudaFree(c_dev));
-	cudaErrorHandle(cudaFree(F_dev));
 
 	if (worksize_FMR_max > 0) {
 		cudaErrorHandle(cudaFree(work));
@@ -573,6 +682,54 @@ __host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X
 	delete[] worksize_FMR;
 	delete[] CG_dev;
 	delete[] F_strided;
+
+	///////////////////////
+	// random walk noise //
+	///////////////////////
+
+	// set up arrays
+	cudaErrorHandle(cudaMalloc(&c_dev, size_F->const_2Bxs*sizeof(myReal)));
+
+	myReal* G_dev;
+	cudaErrorHandle(cudaMalloc(&G_dev, 9*sizeof(myReal)));
+	cudaErrorHandle(cudaMemcpy(G_dev, G, 9*sizeof(myReal), cudaMemcpyHostToDevice));
+
+	myReal* L_dev;
+	cudaErrorHandle(cudaMalloc(&L_dev, sizeof(myReal)));
+	cudaErrorHandle(cudaMemcpy(L_dev, L, sizeof(myReal), cudaMemcpyHostToDevice));
+
+	// set up block and grid sizes
+	dim3 blocksize_512_nR_nx(512, 1, 1);
+	dim3 gridsize_512_nR_nx((int)size_F->nR_compact/512+1, size_F->nx, 1);
+
+	// calculate
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
+			if (i == j) {
+				dim3 blocksize_c(size_F->const_2Bx, 1, 1);
+				get_c <<<1, blocksize_c>>> (c_dev, i, j, L_dev, G_dev, size_F_dev);
+				cudaErrorHandle(cudaGetLastError());
+			}
+			else {
+				dim3 blocksize_c(size_F->const_2Bx, size_F->const_2Bx, 1);
+				get_c <<<1, blocksize_c>>> (c_dev, i, j, L_dev, G_dev, size_F_dev);
+				cudaErrorHandle(cudaGetLastError());
+			}
+
+			get_biasRW_small <<<gridsize_512_nR_nx, blocksize_512_nR_nx>>> (dF3_dev, F_dev, c_dev, i, j, size_F_dev);
+			cudaErrorHandle(cudaGetLastError());
+
+			add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F->nTot_compact);
+			cudaErrorHandle(cudaGetLastError());
+		}
+	}
+
+	// free memory
+	cudaErrorHandle(cudaFree(c_dev));
+	cudaErrorHandle(cudaFree(G_dev));
+	cudaErrorHandle(cudaFree(L_dev));
+	cudaErrorHandle(cudaFree(F_dev));
+	cudaErrorHandle(cudaFree(dF3_dev));
 
 	// return
 	cudaErrorHandle(cudaMemcpy(dF, dF_dev, size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));

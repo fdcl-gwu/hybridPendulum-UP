@@ -33,7 +33,7 @@
 The dynamical model for a hinged 3D pendulum is
 \begin{align*}
 	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
-	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + H\diff{W}_t,
+	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + JH\diff{W}_t,
 \end{align*}
 where $J\in\real^{3\times 3}$ is the moment of inertia matrix, $\rho$ is the vector from the pivot point to the center of mass expressed in the body-fixed frame.
 The Fokker-Planck equation is
@@ -87,10 +87,10 @@ The moment of inertial along body-fixed $e_3$-axis is
 Let $t = \alpha\tilde{t}$, and $\Omega = \tfrac{1}{\alpha}\tilde{\Omega}$, then the equation of motion can be rewritten as
 \begin{align*}
 	R^T\diff{R} &= \hat{\tilde{\Omega}} \diff{\tilde{t}} \\
-	J\diff{\tilde{\Omega}} &= (-\tilde{\Omega}\times J\tilde{\Omega} - \alpha^2mg\rho\times R^Te_3) \diff{\tilde{t}} + \alpha^{3/2} H \diff{W_{\tilde{t}}}.
+	J\diff{\tilde{\Omega}} &= (-\tilde{\Omega}\times J\tilde{\Omega} - \alpha^2mg\rho\times R^Te_3) \diff{\tilde{t}} + \alpha^{3/2} JH \diff{W_{\tilde{t}}}.
 \end{align*}
 Using the above equations, we can define $\tilde{g} = \alpha^2 g$ as an arbitrary number.
-Let $\alpha^2 = \frac{J_{11}}{mg\rho_z}$, $\tilde{J} = \frac{1}{J_{11}}J$, and $\tilde{H} = \alpha^{3/2}J^{-1}H$, then the above equations can be further simplified as
+Let $\alpha^2 = \frac{J_{11}}{mg\rho_z}$, $\tilde{J} = \frac{1}{J_{11}}J$, and $\tilde{H} = \alpha^{3/2}H$, then the above equations can be further simplified as
 \begin{align*}
 	R^T\diff{R} &= \hat{\tilde{\Omega}} \diff{\tilde{t}} \\
 	\diff{\tilde{\Omega}} &= \tilde{J}^{-1} (-\tilde{\Omega}\times \tilde{J}\tilde{\Omega} - e_3\times R^Te_3) \diff{\tilde{t}} + \tilde{H}\diff{W_{\tilde{t}}}.

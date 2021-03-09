@@ -44,14 +44,20 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     myComplex* MR_compact = new myComplex[3*size_F.nR_compact];
     modify_u(MR, MR_compact, &size_F);
 
+    // get b from matlab
+    myReal* b = mymxGetReal(prhs[4]);
+
+    // get G from matlab
+    myReal* G = mymxGetReal(prhs[5]);
+
     // get dt from matlab
-    myReal* dt = mymxGetReal(prhs[4]);
+    myReal* dt = mymxGetReal(prhs[6]);
 
     // get L from matlab
-    myReal* L = mymxGetReal(prhs[5]);
+    myReal* L = mymxGetReal(prhs[7]);
 
     // get u from matlab
-    myComplex* u = (myComplex*) mymxGetComplex(prhs[6]);
+    myComplex* u = (myComplex*) mymxGetComplex(prhs[8]);
 
     myComplex* u_compact = new myComplex[3*size_F.nR_compact];
     modify_u(u, u_compact, &size_F);
@@ -61,20 +67,20 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     for (int l1 = 0; l1 < size_F.BR; l1++) {
         for (int l2 = 0; l2 < size_F.BR; l2++) {
             int ind_CG = l1+l2*size_F.BR;
-            CG[ind_CG] = mymxGetReal(mxGetCell(prhs[7], ind_CG));
+            CG[ind_CG] = mymxGetReal(mxGetCell(prhs[9], ind_CG));
         }
     }
     
     // get method from matlab
     char* method;
-    method = mxArrayToString(prhs[8]);
+    method = mxArrayToString(prhs[10]);
 
     //////////////////
     // calculate dF //
     //////////////////
 
     // if the problem is too large, split arrays
-    bool issmall = (size_F.BR<=10 && size_F.Bx<=10);
+    bool issmall = (size_F.BR<=BR_max && size_F.Bx<=Bx_max);
 
     // set up arrays
     myComplex* dF1;
@@ -96,7 +102,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         // calculate
         // dF1
         dF1 = new myComplex[size_F.nTot_compact];
-        get_dF_small(dF1, Fold_compact, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+        get_dF_small(dF1, Fold_compact, X, OJO, MR_compact, b, G, L, u_compact, CG, &size_F, size_F_dev);
 
         if (stricmp(method,"midpoint") == 0 || stricmp(method,"RK4") == 0) {
             // dF2
@@ -113,7 +119,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             cudaErrorHandle(cudaMemcpy(F2, F2_dev, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
 
             dF2 = new myComplex[size_F.nTot_compact];
-            get_dF_small(dF2, F2, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            get_dF_small(dF2, F2, X, OJO, MR_compact, b, G, L, u_compact, CG, &size_F, size_F_dev);
 
             delete[] F2;
             cudaErrorHandle(cudaFree(F2_dev));
@@ -135,7 +141,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             cudaErrorHandle(cudaMemcpy(F2, F2_dev, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
 
             dF2 = new myComplex[size_F.nTot_compact];
-            get_dF_small(dF2, F2, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            get_dF_small(dF2, F2, X, OJO, MR_compact, b, G, L, u_compact, CG, &size_F, size_F_dev);
 
             delete[] F2;
             cudaErrorHandle(cudaFree(F2_dev));
@@ -157,7 +163,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             cudaErrorHandle(cudaMemcpy(F3, F3_dev, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
 
             dF3 = new myComplex[size_F.nTot_compact];
-            get_dF_small(dF3, F3, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            get_dF_small(dF3, F3, X, OJO, MR_compact, b, G, L, u_compact, CG, &size_F, size_F_dev);
 
             delete[] F3;
             cudaErrorHandle(cudaFree(F3_dev));
@@ -177,7 +183,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             cudaErrorHandle(cudaMemcpy(F4, F4_dev, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
 
             dF4 = new myComplex[size_F.nTot_compact];
-            get_dF_small(dF4, F4, X, OJO, MR_compact, L, u_compact, CG, &size_F, size_F_dev);
+            get_dF_small(dF4, F4, X, OJO, MR_compact, b, G, L, u_compact, CG, &size_F, size_F_dev);
 
             delete[] F4;
             cudaErrorHandle(cudaFree(F4_dev));

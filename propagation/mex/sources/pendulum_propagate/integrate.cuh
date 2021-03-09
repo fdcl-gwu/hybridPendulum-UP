@@ -15,6 +15,8 @@ __global__ void add_FMR_small(myComplex* dF, const myComplex* FMR, const int ind
 __global__ void add_FMR_large(myComplex* dF, const myComplex* FMR, const int ind_cumR, const Size_F* size_F);
 __global__ void mulImg_FTot_small(myComplex* dF, const myReal* c, const int dim, const Size_F* size_F);
 __global__ void mulImg_FTot_large(myComplex* dF, const myReal* c, const int dim, const int k, const Size_F* size_F);
+__global__ void get_c(myReal* c, const int i, const int j, const myReal* L, const myReal* G, const Size_F* size_F);
+__global__ void get_biasRW_small(myComplex* dF_temp, const myComplex* Fold, const myReal* c, const int i, const int j, const Size_F* size_F);
 __global__ void integrate_Fnew(myComplex* Fnew, const myComplex* Fold, const myComplex* dF, const myReal dt, const int nTot);
 
 __host__ void modify_F(const myComplex* F, myComplex* F_modify, bool reduce, Size_F* size_F);
@@ -22,8 +24,8 @@ __host__ void permute_F(myComplex* F, bool R_first, const Size_F* size_F);
 __host__ void modify_u(const myComplex* u, myComplex* u_modify, Size_F* size_F);
 
 __host__ void deriv_x(myReal* c, const int n, const int B, const myReal L);
-__host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR,
-	const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
+__host__ void get_dF_small(myComplex* dF, const myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR, const myReal* b,
+	const myReal* G, const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
 __host__ void get_dF_large(myComplex* dF, myComplex* F, const myComplex* X, const myComplex* OJO, const myComplex* MR,
     const myReal* L, const myComplex* u, const myReal* const* CG, const Size_F* size_F, const Size_F* size_F_dev);
 

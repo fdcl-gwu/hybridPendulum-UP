@@ -198,7 +198,24 @@ for nt = 1:Nt-1
     toc;
 end
 
+stat.ER = ER;
+stat.Ex = Ex;
+stat.Varx = Varx;
+stat.EvR = EvR;
+stat.ExvR = ExvR;
+stat.EvRvR = EvRvR;
 
+MFG.U = U;
+MFG.S = S;
+MFG.V = V;
+MFG.Miu = Miu;
+MFG.Sigma = Sigma;
+MFG.P = P;
+
+if saveToFile
+    save(strcat(path,'\stat'),'stat');
+    save(strcat(path,'\MFG'),'MFG');
+end
 
 rmpath('../rotation3d');
 rmpath('../matrix Fisher');

@@ -1,4 +1,4 @@
-function [ stat, MFG, R_res, x_res ] = pendulum_MC(  )
+function [ stat, MFG, R_res, x_res ] = pendulum_MC( R, x )
 
 addpath('../matrix Fisher');
 addpath('../rotation3d');
@@ -10,22 +10,46 @@ J = diag([0.0152492,0.0142639,0.00380233]);
 
 rho = [0;0;0.0679878];
 m = 1.85480;
-g = 3;
+g = 9.8;
+
+b = [0.2;0.2;0.5];
+
+% scaled parameters
+Jt = J/J(1,1);
+tscale = sqrt(J(1,1)/(m*g*rho(3)));
+
+bt = b*tscale;
 
 % time
-sf = 200;
-T = 2;
+sf = 400;
+T = 0.5;
 Nt = T*sf+1;
 
-% initial conditions
-S = diag([10,10,10]);
-U = expRot([pi*2/3,0,0]);
-R = pdf_MF_sampling_gpu(U*S,Ns);
+% scaled time
+dtt = 1/sf/tscale;
 
-Miu = [0;0;0];
-Sigma = 1^2*eye(3);
-x = mvnrnd(Miu,Sigma,Ns)';
-x = gpuArray(x);
+% noise
+H = eye(3)*2;
+
+% scaled noise
+Ht = H*tscale^(3/2);
+
+% initial conditions
+if ~exist('R','var')
+    S = diag([5,5,5]);
+    U = expRot([pi*2/3,0,0]);
+    R = pdf_MF_sampling_gpu(U*S,Ns);
+end
+
+if ~exist('x','var')
+    Miu = [0;0;0]*tscale;
+    Sigma = (2*tscale)^2*eye(3);
+    x = mvnrnd(Miu,Sigma,Ns)';
+    x = gpuArray(x);
+else
+    x = tscale*x;
+    Ns = size(x,2);
+end
 
 % statistics
 MFG.U = zeros(3,3,Nt);
@@ -55,7 +79,9 @@ x_res(:,:,1) = gather(x(:,1:1000));
 for nt = 1:Nt-1
     tic;
     
-    [R,x] = LGVI(R,x,1/sf,m,rho,J,g);
+    [R,x] = LGVI(R,x,dtt,Jt,bt);
+    x = x + sqrt(dtt)*Ht*[randn([1,Ns],'gpuArray');randn([1,Ns],'gpuArray');randn([1,Ns],'gpuArray')];
+    
     R_res(:,:,:,nt+1) = gather(R(:,:,1:1000));
     x_res(:,:,nt+1) = gather(x(:,1:1000));
     
@@ -72,16 +98,15 @@ rmpath('../rotation3d');
 end
 
 
-function [ R, x ] = LGVI( R, x, dt, m, rho, J, g)
+function [ R, x ] = LGVI( R, x, dt, J, bt )
 
 Ns = size(R,3);
 
 x = gpuArray(x);
 R = gpuArray(R);
 
-M = -m*g*permute(cat(1,rho(2)*R(3,3,:)-rho(3)*R(3,2,:),...
-    rho(3)*R(3,1,:)-rho(1)*R(3,3,:),...
-    rho(1)*R(3,2,:)-rho(2)*R(3,1,:)),[1,3,2]);
+M = -[permute(-R(3,2,:),[1,3,2]);permute(R(3,1,:),[1,3,2]);zeros(1,Ns)];
+M = M - bt.*x;
 
 dR = gpuArray.zeros(3,3,Ns);
 A = dt*J*x+dt^2/2*M;
@@ -132,9 +157,8 @@ end
 
 R = mulRot(R,dR);
     
-M2 = -m*g*permute(cat(1,rho(2)*R(3,3,:)-rho(3)*R(3,2,:),...
-    rho(3)*R(3,1,:)-rho(1)*R(3,3,:),...
-    rho(1)*R(3,2,:)-rho(2)*R(3,1,:)),[1,3,2]);
+M2 = -[permute(-R(3,2,:),[1,3,2]);permute(R(3,1,:),[1,3,2]);zeros(1,Ns)];
+M2 = M2 - bt.*x;
 x = J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x,[1,3,2])),[1,3,2]) + ...
     dt/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + dt/2*M2);
 

@@ -21,6 +21,9 @@
 	#define mymxGetComplex mxGetComplexSingles
 	#define mymxGetReal mxGetSingles
 	#define mymxRealClass mxSINGLE_CLASS
+
+    #define BR_max 15
+	#define Bx_max 10
 #else
 	typedef double myReal;
 	typedef cuDoubleComplex myComplex;
@@ -34,6 +37,9 @@
 	#define mymxGetComplex mxGetComplexDoubles
 	#define mymxGetReal mxGetDoubles
 	#define mymxRealClass mxDOUBLE_CLASS
+
+	#define BR_max 10
+	#define Bx_max 10
 #endif
 
 constexpr myReal PI = 3.141592653589793;

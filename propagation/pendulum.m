@@ -38,21 +38,28 @@ else
     saveToFile = false;
 end
 
-% time
-sf = 200;
-T = 2;
-Nt = T*sf+1;
-
 % parameters
 J = diag([0.0152492,0.0142639,0.00380233]);
 
 rho = [0;0;0.0679878];
 m = 1.85480;
-g = 3;
+g = 9.8;
+
+% scaled parameters
+Jt = J/J(1,1);
+tscale = sqrt(J(1,1)/(m*g*rho(3)));
+
+% time
+sf = 400;
+T = 0.5;
+Nt = T*sf+1;
+
+% scaled time
+dtt = 1/sf/tscale;
 
 % band limit
-BR = 10;
-Bx = 10;
+BR = 5;
+Bx = 5;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -81,7 +88,7 @@ for i = 1:2*BR
 end
 
 % grid over R^3
-L = 16;
+L = 4;
 x = zeros(3,2*Bx,2*Bx,2*Bx,precision);
 for i = 1:2*Bx
     for j = 1:2*Bx
@@ -136,9 +143,9 @@ for i = 1:3
 end
 
 % Fourier transform of J^-1*cross(Omega,J*Omega)
-ojo = -cross(x,permute(pagefun(@mtimes,J,permute(gpuArray(x),...
+ojo = -cross(x,permute(pagefun(@mtimes,Jt,permute(gpuArray(x),...
     [1,5,2,3,4])),[1,3,4,5,2]));
-ojo = permute(pagefun(@mtimes,J^-1,permute(ojo,[1,5,2,3,4])),[1,3,4,5,2]);
+ojo = permute(pagefun(@mtimes,Jt^-1,permute(ojo,[1,5,2,3,4])),[1,3,4,5,2]);
 
 if use_mex
     OJO = zeros(2*Bx,2*Bx,2*Bx,3,precision);
@@ -157,8 +164,8 @@ end
 clear ojo;
 
 % Fourier transform of J^-1*M(R)
-mR = -m*g*cross(repmat(rho,1,2*BR,2*BR,2*BR),permute(R(3,:,:,:,:),[2,3,4,5,1]));
-mR = permute(pagefun(@mtimes,J^-1,permute(gpuArray(mR),[1,5,2,3,4])),[1,3,4,5,2]);
+mR = permute(cat(1,R(3,2,:),-R(3,1,:),zeros(1,1,(2*BR)^3)),[1,3,2]);
+mR = gpuArray(reshape(Jt^-1*mR,3,2*BR,2*BR,2*BR));
 
 if use_mex
     MR = zeros(2*lmax+1,2*lmax+1,lmax+1,3,precision);
@@ -186,23 +193,25 @@ end
 clear mR F1;
 
 % damping
-b = 0;
+b = [0.2;0.2;0.2];
+bt = b*tscale;
 if FP == 32
-    b = single(b);
+    bt = single(bt);
 end
 
 % noise
-H = eye(3)*0;
-G = 0.5*(H*H.');
+H = eye(3)*2;
+Ht = H*tscale^(3/2);
+G = 0.5*(Ht*Ht.');
 if FP == 32
     G = single(G);
 end
 
 % initial conditions
-S = diag([10,10,10]);
+S = diag([5,5,5]);
 U = expRot([pi*2/3,0,0]);
-Miu = [0;0;0];
-Sigma = 1^2*eye(3);
+Miu = [0;0;0]*tscale;
+Sigma = (2*tscale)^2*eye(3);
 
 c = pdf_MF_normal(diag(S));
 
@@ -212,6 +221,24 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
 
 if saveToFile
     save(strcat(path,'\f1'),'f');
+end
+
+% initial Fourier transform
+F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,precision);
+for k = 1:2*BR
+    F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
+end
+F1 = fftshift(fftshift(F1,1),3);
+F1 = flip(flip(F1,1),3);
+
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,precision);
+for l = 0:lmax
+    for m = -l:l
+        for n = -l:l
+            F(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
+                permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
+        end
+    end
 end
 
 % pre-allocate memory
@@ -235,40 +262,22 @@ EvRvR = zeros(3,3,Nt);
 
 %% propagation
 if FP == 32
-    sf = single(sf);
+    dtt = single(dtt);
     L = single(L);
 end
 
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,precision);
 for nt = 1:Nt-1
     tic;
-    
-    % forward
-    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,precision);
-    for k = 1:2*BR
-        F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
-    end
-    F1 = fftshift(fftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
-    
-    for l = 0:lmax
-        for m = -l:l
-            for n = -l:l
-                F(m+lmax+1,n+lmax+1,l+1,:,:,:) = sum(w.*F1(m+lmax+1,:,n+lmax+1,:,:,:).*...
-                    permute(d(m+lmax+1,n+lmax+1,l+1,:),[1,4,3,2]),2);
-            end
-        end
-    end
     
     % propagating Fourier coefficients
     if use_mex
         if FP == 32
-            F = pendulum_propagate32(F,X,OJO,MR,b,G,1/sf,L,u,CG,method);
+            F = pendulum_propagate32(F,X,OJO,MR,bt,G,dtt,L,u,CG,method);
         elseif FP == 64
-            F = pendulum_propagate(F,X,OJO,MR,b,G,1/sf,L,u,CG,method);
+            F = pendulum_propagate(F,X,OJO,MR,bt,G,dtt,L,u,CG,method);
         end
     else
-        F = integrate(F,X,OJO,MR,b,G,1/sf,L,u,CG,method,precision);
+        F = integrate(F,X,OJO,MR,bt,G,dtt,L,u,CG,method,precision);
     end
     
     % backward
@@ -413,10 +422,14 @@ for l = 0:lmax
 end
 
 % b*Omega
+bX(:,:,:,1) = -b(1)*X(:,:,:,1);
+bX(:,:,:,2) = -b(2)*X(:,:,:,2);
+bX(:,:,:,3) = -b(3)*X(:,:,:,3);
+
 for ix = 1:2*Bx
     for jx = 1:2*Bx
         for kx = 1:2*Bx
-            bX_ijk = flip(flip(flip(-b*X,1),2),3);
+            bX_ijk = flip(flip(flip(bX,1),2),3);
             bX_ijk = circshift(bX_ijk,ix,1);
             bX_ijk = circshift(bX_ijk,jx,2);
             bX_ijk = circshift(bX_ijk,kx,3);
@@ -498,10 +511,10 @@ clear temp1 temp2 temp3
 for i = 1:3
     for j = 1:3
         if i==j
-            c = pi^2*[0:Bx-1,-Bx:-1].^2;
+            c = 4*pi^2*[0:Bx-1,-Bx:-1].^2/L^2;
             c = -shiftdim(c,-(i+1));
         else
-            c = pi*[0:Bx-1,0,-Bx+1:-1];
+            c = 2*pi*[0:Bx-1,0,-Bx+1:-1]/L;
             c = -shiftdim(c,-(i+1)).*shiftdim(c,-(j+1));
         end
         
