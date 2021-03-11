@@ -1,0 +1,52 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\begin{document}
+	
+\section{Spherical Harmonics}
+
+\subsection{Product Formula}
+
+Consider the dynamics of a 3D pendulum
+\begin{align}
+	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
+	\diff{\Omega} &= -J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3) \diff{t}
+\end{align}
+Suppose $J = \diag(J_1,J_1,J_3)$ and $\rho = [0,0,\rho_z]^T$, then $\diff{\Omega_3}/\diff{t} = 0$.
+So we may assume $\Omega_3\equiv 0$, then the dynamics equation can be reduced to (after adding damping and noises)
+\begin{align}
+	R^T\diff{R} &= \left(\begin{bmatrix} \Omega_1 & \Omega_2 & 0 \end{bmatrix}^T\right)^\wedge \diff{t} \\
+	\diff{\Omega_1} &= \left( J_1^{-1}mg\rho_zR_{32} - b_1\Omega_1 \right) \diff{t} + H\diff{W^1_t} \\
+	\diff{\Omega_2} &= \left( -J_1^{-1}mg\rho_zR_{31} - b_2\Omega_2 \right) \diff{t} + H\diff{W^2_t}
+\end{align}
+Let $\tilde{t} = \tfrac{1}{\alpha} t$, $\tilde{\Omega}_1 = \alpha\Omega_1$ $\tilde{\Omega}_2 = \alpha\Omega_2$, $\tilde{b}_1 = \alpha b_1$, $\tilde{b}_2 = \alpha b_2$, and $\tilde{H} = \alpha^{3/2}H$, where $\alpha = \sqrt{\tfrac{J_1}{mg\rho_z}}$,
+then the dynamics equation becomes
+\begin{align}
+	R^T\diff{R} &= \left(\begin{bmatrix} \tilde{\Omega}_1 & \tilde{\Omega}_2 & 0 \end{bmatrix}^T\right)^\wedge \diff{\tilde{t}} \\
+	\diff{\tilde{\Omega}_1} &= \left( R_{32} - \tilde{b}_1\tilde{\Omega}_1 \right) \diff{\tilde{t}} + \tilde{H} \diff{W^1_{\tilde{t}}} \\
+	\diff{\tilde{\Omega}_2} &= \left( -R_{31} - \tilde{b}_2\tilde{\Omega}_2 \right) \diff{\tilde{t}} + \tilde{H} \diff{W^2_{\tilde{t}}}
+\end{align}
+
+\end{document}
+
