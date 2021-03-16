@@ -8,11 +8,19 @@ if (size(varargin{1},1)==3 && size(varargin{1},2)==3)
     isDensity = false;
     R = varargin{1};
     sf = varargin{2};
+    
+    if size(varargin,2) == 3
+        slow = varargin{3};
+    end
 else
     isDensity = true;
     path = varargin{1};
     L = varargin{2};
     sf = varargin{3};
+    
+    if size(varargin,2) == 4
+        slow = varargin{4};
+    end
 end
 
 if isDensity
@@ -73,7 +81,13 @@ if isDensity
                 f = double(f);
             end
             
-            fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
+            if ndims(f) == 6
+                fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
+            elseif ndims(f) == 5
+                fR = sum(f,[4,5])*(L/(2*Bx))^2;
+            else
+                error('Dimensions of f is wrong');
+            end
             fR = reshape(fR,1,[]);
             
             c = zeros(Nt1,Nt2,3);
@@ -121,17 +135,32 @@ if isDensity
         end
     end
 else
-    Nt = size(R,3);
+    if ndims(R) == 3
+        Nt = size(R,3);
+    else
+        Nt = size(R,4);
+    end
+    
     for nt = 1:Nt
         f = figure; hold on;
-        plot3([0,R(1,1,nt)],[0,R(2,1,nt)],[0,R(3,1,nt)]);
-        plot3([0,R(1,2,nt)],[0,R(2,2,nt)],[0,R(3,2,nt)]);
-        plot3([0,R(1,3,nt)],[0,R(2,3,nt)],[0,R(3,3,nt)]);
+        color = get(gca,'ColorOrder');
+        
+        if ndims(R) == 3
+            plot3([0,R(1,1,nt)],[0,R(2,1,nt)],[0,R(3,1,nt)]);
+            plot3([0,R(1,2,nt)],[0,R(2,2,nt)],[0,R(3,2,nt)]);
+            plot3([0,R(1,3,nt)],[0,R(2,3,nt)],[0,R(3,3,nt)]);
+        else
+            for i = 1:size(R,3)
+                plot3([0,R(1,1,i,nt)],[0,R(2,1,i,nt)],[0,R(3,1,i,nt)],'Color',color(1,:));
+                plot3([0,R(1,2,i,nt)],[0,R(2,2,i,nt)],[0,R(3,2,i,nt)],'Color',color(2,:));
+                plot3([0,R(1,3,i,nt)],[0,R(2,3,i,nt)],[0,R(3,3,i,nt)],'Color',color(3,:));
+            end
+        end
 
         xlim([-1,1]);
         ylim([-1,1]);
         zlim([-1,1]);
-        view([1,1,0]);
+        view([0,0,1]);
 
         annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.85,0.16,0.07]);
 
@@ -145,7 +174,12 @@ if isDensity
 else
     v = VideoWriter('R1.avi');
 end
-v.FrameRate = sf;
+
+if exist('slow','var')
+    v.FrameRate = sf/slow;
+else
+    v.FrameRate = sf;
+end
 v.Quality = 100;
 open(v);
 writeVideo(v,M);

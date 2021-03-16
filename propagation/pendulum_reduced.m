@@ -56,8 +56,8 @@ Nt = T*sf+1;
 dtt = 1/sf/tscale;
 
 % band limit
-BR = 5;
-Bx = 5;
+BR = 12;
+Bx = 10;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -86,7 +86,7 @@ for i = 1:2*BR
 end
 
 % grid over R^3
-L = 4;
+L = 1.6*2;
 x = zeros(2,2*Bx,2*Bx,precision);
 for i = 1:2*Bx
     for j = 1:2*Bx
@@ -174,7 +174,7 @@ if FP == 32
 end
 
 % noise
-H = eye(2)*2;
+H = eye(2)*1;
 Ht = H*tscale^(3/2);
 G = 0.5*(Ht*Ht.');
 if FP == 32
@@ -182,7 +182,7 @@ if FP == 32
 end
 
 % initial conditions
-S = diag([5,5,5]);
+S = diag([15,15,15]);
 U = expRot([pi*2/3,0,0]);
 Miu = [0;0]*tscale;
 Sigma = (2*tscale)^2*eye(2);

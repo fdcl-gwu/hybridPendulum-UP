@@ -12,7 +12,7 @@ rho = [0;0;0.0679878];
 m = 1.85480;
 g = 9.8;
 
-b = [0.2;0.2;0.5];
+b = [0.2;0.2;0.2];
 
 % scaled parameters
 Jt = J/J(1,1);
@@ -22,7 +22,7 @@ bt = b*tscale;
 
 % time
 sf = 400;
-T = 0.5;
+T = 1;
 Nt = T*sf+1;
 
 % scaled time

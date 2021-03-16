@@ -21,22 +21,22 @@ tscale = sqrt(J(1,1)/(m*g*rho(3)));
 bt = b*tscale;
 
 % time
-sf = 400;
-T = 0.5;
+sf = 100;
+T = 1;
 Nt = T*sf+1;
 
 % scaled time
 dtt = 1/sf/tscale;
 
 % noise
-H = diag([2,2,0]);
+H = diag([1,1,0]);
 
 % scaled noise
 Ht = H*tscale^(3/2);
 
 % initial conditions
 if ~exist('R','var')
-    S = diag([5,5,5]);
+    S = diag([15,15,15]);
     U = expRot([pi*2/3,0,0]);
     R = pdf_MF_sampling_gpu(U*S,Ns);
 end
@@ -130,7 +130,8 @@ expRot = @(v) eye(3) + permute(sin(normv(v))./normv(v),[1,3,2]).*hat(v) + ...
     permute((1-cos(normv(v)))./sum(v.^2,1),[1,3,2]).*pagefun(@mtimes,hat(v),hat(v));
 
 % initializa Newton method
-v = gpuArray.ones(3,Ns)*1e-5;
+v = gpuArray.ones(2,Ns)*1e-5;
+v = [v;gpuArray.zeros(1,Ns)];
 
 % tolerance
 epsilon = 1e-5;
@@ -162,6 +163,7 @@ M2 = -[permute(-R(3,2,:),[1,3,2]);permute(R(3,1,:),[1,3,2]);zeros(1,Ns)];
 M2 = M2 - bt.*x;
 x = J^-1*(permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(J*x,[1,3,2])),[1,3,2]) + ...
     dt/2*permute(pagefun(@mtimes,permute(dR,[2,1,3]),permute(M,[1,3,2])),[1,3,2]) + dt/2*M2);
+x(3,:) = 0;
 
 end
 
