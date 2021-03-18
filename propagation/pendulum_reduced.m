@@ -408,7 +408,7 @@ for ix = 1:2*Bx
     end
 end
 
-clear temp1 temp2 temp3
+clear temp1 temp2
 
 % -mg*cross(rho,R'*e3)
 temp1 = gpuArray.zeros(size(F),precision);
@@ -443,7 +443,7 @@ end
 c = 2*pi*1i*[0:Bx-1,0,-Bx+1:-1]/L;
 dF = dF - temp1.*permute(c,[1,3,4,2]) - temp2.*permute(c,[1,3,4,5,2]);
 
-clear temp1 temp2 temp3
+clear temp1 temp2
 
 % noise
 for i = 1:2

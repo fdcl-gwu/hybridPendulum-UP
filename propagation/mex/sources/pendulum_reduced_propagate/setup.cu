@@ -82,8 +82,8 @@ __host__ void cutensor_initFMR(cutensorHandle_t* handle, cutensorContractionPlan
 	int m = (2*l+1)*(2*l+1);
 
 	int64_t extent_Fold[2] = {m, size_F->nx};
-	int64_t extent_MR[2] = {m, 3};
-	int64_t extent_FMR[2] {size_F->nx, 3};
+	int64_t extent_MR[2] = {m, 2};
+	int64_t extent_FMR[2] {size_F->nx, 2};
 
 	cutensorTensorDescriptor_t desc_Fold;
 	cutensorTensorDescriptor_t desc_MR;

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <iostream>
 
-__global__ void flip_shift(const myComplex* X, myComplex* X_ijk, const int is, const int js, const Size_F* size_F)
+__global__ void flip_shift(const myComplex* X, myComplex* X_ij, const int is, const int js, const Size_F* size_F)
 {
 	int i = blockIdx.x*blockDim.x + threadIdx.x;
 	int j = blockIdx.y*blockDim.y + threadIdx.y;
@@ -25,7 +25,7 @@ __global__ void flip_shift(const myComplex* X, myComplex* X_ijk, const int is, c
 		int X_ij_ind = iout + jout*size_F[0].const_2Bx;
 
 		for (int ip = 0; ip < 2; ip++)
-			X_ijk[X_ij_ind + ip*size_F[0].nx] = X[X_ind + ip*size_F[0].nx];
+			X_ij[X_ij_ind + ip*size_F[0].nx] = X[X_ind + ip*size_F[0].nx];
 	}
 }
 
@@ -67,7 +67,7 @@ __global__ void mulImg_FTot(myComplex* dF, const myReal* c, const int dim, const
 {
 	int ind_R = threadIdx.x + blockIdx.x*blockDim.x;
 	if (ind_R < size_F->nR_compact) {
-		int ij[2] = {blockIdx.y, blockIdx.z};
+		unsigned int ij[2] = {blockIdx.y, blockIdx.z};
 		int ind_dF = ind_R + (ij[0] + ij[1]*size_F->const_2Bx)*size_F->nR_compact;
 
 		myReal y = dF[ind_dF].y;
@@ -113,7 +113,7 @@ __global__ void get_biasRW(myComplex* dF_temp, const myComplex* Fold, const myRe
 {
 	int indR = threadIdx.x + blockIdx.x*blockDim.x;
 	if (indR < size_F[0].nR_compact) {
-		int ij[2] = {blockIdx.y, blockIdx.z};
+		unsigned int ij[2] = {blockIdx.y, blockIdx.z};
 
 		int ind = indR + (ij[0] + ij[1]*size_F->const_2Bx)*size_F[0].nR_compact;
 
@@ -231,8 +231,11 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 	myComplex* X_ij_dev;
 	cudaErrorHandle(cudaMalloc(&X_ij_dev, 2*size_F->nx*sizeof(myComplex)));
 
-	myComplex* dF3_dev;
-	cudaErrorHandle(cudaMalloc(&dF3_dev, 2*size_F->nTot_compact*sizeof(myComplex)));
+	myComplex* dF2_dev;
+	cudaErrorHandle(cudaMalloc(&dF2_dev, 2*size_F->nTot_compact*sizeof(myComplex)));
+
+	myComplex* dF2_temp_dev;
+	cudaErrorHandle(cudaMalloc(&dF2_temp_dev, 2*size_F->nTot_compact*sizeof(myComplex)));
 
 	myComplex* dF_temp_dev;
 	cudaErrorHandle(cudaMalloc(&dF_temp_dev, 2*size_F->nR_compact*sizeof(myComplex)));
@@ -285,11 +288,11 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 				(void*)&beta_cutensor, dF_temp_dev, dF_temp_dev, work, worksize_conv, 0));
 
 			for (int ip = 0; ip < 2; ip++) {
-				myComplex* dF3_dev_ijn = dF3_dev + i*size_F->nR_compact + 
+				myComplex* dF2_dev_ijn = dF2_dev + i*size_F->nR_compact + 
 					j*(size_F->nR_compact*size_F->const_2Bx) + ip*size_F->nTot_compact;
 				myComplex* dF_temp_dev_n = dF_temp_dev + ip*size_F->nR_compact;
 
-				cudaErrorHandle(cudaMemcpy(dF3_dev_ijn, dF_temp_dev_n, size_F->nR_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
+				cudaErrorHandle(cudaMemcpy(dF2_dev_ijn, dF_temp_dev_n, size_F->nR_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
 			}
 		}
 	}
@@ -304,16 +307,20 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 			long long int stride_u = 0;
 
 			cublasErrorHandle(mycublasgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, 2*l+1, 2*l+1, 2*l+1,
-				&alpha_cublas, dF3_dev+ind_dF, 2*l+1, stride_Fnew,
+				&alpha_cublas, dF2_dev+ind_dF, 2*l+1, stride_Fnew,
 				u_dev+ind_u, 2*l+1, stride_u,
-				&beta_cublas, dF3_dev+ind_dF, 2*l+1, stride_Fnew, size_F->nx));
+				&beta_cublas, dF2_temp_dev+ind_dF, 2*l+1, stride_Fnew, size_F->nx));
 		}
 	}
 
-	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F->nTot_compact);
+	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF2_temp_dev, size_F->nTot_compact);
 	cudaErrorHandle(cudaGetLastError());
 
-	cudaErrorHandle(cudaMemcpy(dF_dev, dF3_dev, size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
+	cudaErrorHandle(cudaMemcpy(dF_dev, dF2_temp_dev, size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
+
+	// free memory
+	cudaErrorHandle(cudaFree(u_dev));
+	cudaErrorHandle(cudaFree(dF2_temp_dev));
 
 	//////////////////////////////
 	// circular convolutions bX //
@@ -350,23 +357,19 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 			cudaErrorHandle(cudaGetLastError());
 
 			for (int ip = 0; ip < 2; ip++) {
-				myComplex* dF3_dev_ijp = dF3_dev + i*size_F->nR_compact + 
+				myComplex* dF2_dev_ijp = dF2_dev + i*size_F->nR_compact + 
 					j*(size_F->nR_compact*size_F->const_2Bx) + ip*size_F->nTot_compact;
 				myComplex* dF_temp_dev_p = dF_temp_dev + ip*size_F->nR_compact;
 
-				cudaErrorHandle(cudaMemcpy(dF3_dev_ijp, dF_temp_dev_p, size_F->nR_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
+				cudaErrorHandle(cudaMemcpy(dF2_dev_ijp, dF_temp_dev_p, size_F->nR_compact*sizeof(myComplex), cudaMemcpyDeviceToDevice));
 			}
 		}
 	}
 
-	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F->nTot_compact);
+	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF2_dev, size_F->nTot_compact);
 	cudaErrorHandle(cudaGetLastError());
 
-	// test
-	myComplex* dF3 = new myComplex[size_F->nTot_compact*2];
-	cudaErrorHandle(cudaMemcpy(dF3, dF3_dev, 2*size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
-
-	add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F->nTot_compact);
+	add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF2_dev, size_F->nTot_compact);
 	cudaErrorHandle(cudaGetLastError());
 
 	// free memory
@@ -414,7 +417,7 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 	myComplex* FMR_temp_dev;
 	cudaErrorHandle(cudaMalloc(&FMR_temp_dev, 2*size_F->nx*sizeof(myComplex)));
 
-	cudaErrorHandle(cudaMemset(dF3_dev, 0, 2*size_F->nTot_compact*sizeof(myComplex)));
+	cudaErrorHandle(cudaMemset(dF2_dev, 0, 2*size_F->nTot_compact*sizeof(myComplex)));
 
 	// get c
 	myReal* c = new myReal[size_F->const_2Bx];
@@ -481,7 +484,7 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 							cutensorErrorHandle(cutensorContraction(&handle_cutensor, &plan_FMR[l1], &alpha_cutensor, F_strided[l1],
 								FMR_dev, &beta_cutensor, FMR_temp_dev, FMR_temp_dev, work, worksize_FMR[l1], 0));
 
-							add_FMR <<<gridsize_addMFR, blocksize_addMFR>>> (dF3_dev, FMR_temp_dev, ind_mnl, size_F_dev);
+							add_FMR <<<gridsize_addMFR, blocksize_addMFR>>> (dF2_dev, FMR_temp_dev, ind_mnl, size_F_dev);
 						}
 					}
 				}
@@ -490,14 +493,14 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 	}
 
 	for (int ip = 0; ip < 2; ip++) {
-		mulImg_FTot <<<gridsize_deriv, blocksize_deriv>>> (dF3_dev+ip*size_F->nTot_compact, c_dev, ip, size_F_dev);
+		mulImg_FTot <<<gridsize_deriv, blocksize_deriv>>> (dF2_dev+ip*size_F->nTot_compact, c_dev, ip, size_F_dev);
 		cudaErrorHandle(cudaGetLastError());
 	}
 
-	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF3_dev, size_F->nTot_compact);
+	addup_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF2_dev, size_F->nTot_compact);
 	cudaErrorHandle(cudaGetLastError());
 
-	add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F->nTot_compact);
+	add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF2_dev, size_F->nTot_compact);
 	cudaErrorHandle(cudaGetLastError());
 
 	// free memory
@@ -556,10 +559,10 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 				cudaErrorHandle(cudaGetLastError());
 			}
 
-			get_biasRW <<<gridsize_deriv, blocksize_deriv>>> (dF3_dev, F_dev, c_dev, i, j, size_F_dev);
+			get_biasRW <<<gridsize_deriv, blocksize_deriv>>> (dF2_dev, F_dev, c_dev, i, j, size_F_dev);
 			cudaErrorHandle(cudaGetLastError());
 
-			add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF3_dev, size_F->nTot_compact);
+			add_F <<<gridsize_512_nTot, blocksize_512_nTot>>> (dF_dev, dF2_dev, size_F->nTot_compact);
 			cudaErrorHandle(cudaGetLastError());
 		}
 	}
@@ -569,7 +572,7 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myComplex* X, cons
 	cudaErrorHandle(cudaFree(G_dev));
 	cudaErrorHandle(cudaFree(L_dev));
 	cudaErrorHandle(cudaFree(F_dev));
-	cudaErrorHandle(cudaFree(dF3_dev));
+	cudaErrorHandle(cudaFree(dF2_dev));
 
 	// return
 	cudaErrorHandle(cudaMemcpy(dF, dF_dev, size_F->nTot_compact*sizeof(myComplex), cudaMemcpyDeviceToHost));
