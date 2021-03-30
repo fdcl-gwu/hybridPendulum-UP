@@ -88,14 +88,14 @@ else
 end
 
 % fft
-F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,'like',f);
 for k = 1:2*BR
     F1(:,k,:,:,:,:) = fftn(f(:,k,:,:,:,:));
 end
 F1 = fftshift(fftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
 
-F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx);
+F = zeros(2*lmax+1,2*lmax+1,lmax+1,2*Bx,2*Bx,2*Bx,'like',F1);
 for l = 0:lmax
     for m = -l:l
         for n = -l:l

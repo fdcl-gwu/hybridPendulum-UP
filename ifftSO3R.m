@@ -14,7 +14,7 @@ for j = 1:2*BR
 end
 
 % ifft
-F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx);
+F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,'like',F);
 for m = -lmax:lmax
     for n = -lmax:lmax
         lmin = max(abs(m),abs(n));
@@ -28,12 +28,10 @@ for m = -lmax:lmax
     end
 end
 
-F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,2*Bx));
-F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,2*Bx));
 F1 = ifftshift(ifftshift(F1,1),3);
 F1 = flip(flip(F1,1),3);
 
-f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx);
+f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,2*Bx,'like',F1);
 for k = 1:2*BR
     f(:,k,:,:,:,:) = ifftn(F1(:,k,:,:,:,:))*(2*BR)^2;
 end
