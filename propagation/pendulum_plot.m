@@ -69,8 +69,8 @@ if isDensity
             v_R = v_R.v_R;
         catch
             [ind_R,v_R] = interpInd(R,s1,s2,s3,theta,d_threshold);
-            save(strcat(path,'\ind_R'),'ind_R');
-            save(strcat(path,'\v_R'),'v_R');
+            save(strcat(path,'\ind_R'),'ind_R','-v7.3');
+            save(strcat(path,'\v_R'),'v_R','-v7.3');
         end
         
         parfor nt = 1:Nt
