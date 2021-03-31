@@ -49,7 +49,7 @@ tscale = sqrt(J/(m*g*rho));
 
 % time
 sf = 400;
-T = 4;
+T = 1;
 Nt = T*sf+1;
 
 % scaled time
@@ -221,35 +221,39 @@ for nt = 1:Nt-1
     % propagating Fourier coefficients
     if use_mex
         if FP == 32
-            F = pendulum_propagate_reduced_den32(F,X,mR,bt,G,dtt,L,u,d,w,method);
+            F = pendulum_propagate_reduced_den32(F,f,X,mR,bt,G,dtt,L,u,d,w,method);
         elseif FP == 64
-            F = pendulum_propagate_reduced_den(F,X,mR,bt,G,dtt,L,u,d,w,method);
+            F = pendulum_propagate_reduced_den(F,f,X,mR,bt,G,dtt,L,u,d,w,method);
         end
     else
-        F = integrate(F,X,mR,bt,G,dtt,L,u,d,w,method,precision);
+        F = integrate(F,f,X,mR,bt,G,dtt,L,u,d,w,method,precision);
     end
     
     % backward
-    F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,precision);
-    for m = -lmax:lmax
-        for n = -lmax:lmax
-            lmin = max(abs(m),abs(n));
-            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:);
+    if use_mex
+        f = fftSO3R_mex('backward',F,d);
+    else
+        F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,precision);
+        for m = -lmax:lmax
+            for n = -lmax:lmax
+                lmin = max(abs(m),abs(n));
+                F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:);
 
-            for k = 1:2*BR
-                d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
-                F1(m+lmax+1,k,n+lmax+1,:,:) = sum((2*permute(lmin:lmax,...
-                    [1,3,2])+1).*F_mn.*d_jk_betak,3);
+                for k = 1:2*BR
+                    d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
+                    F1(m+lmax+1,k,n+lmax+1,:,:) = sum((2*permute(lmin:lmax,...
+                        [1,3,2])+1).*F_mn.*d_jk_betak,3);
+                end
             end
         end
-    end
 
-    F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,precision));
-    F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,precision));
-    F1 = ifftshift(ifftshift(F1,1),3);
-    F1 = flip(flip(F1,1),3);
-    for k = 1:2*BR
-        f(:,k,:,:,:) = ifftn(F1(:,k,:,:,:),'symmetric')*(2*BR)^2;
+        F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx,precision));
+        F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx,precision));
+        F1 = ifftshift(ifftshift(F1,1),3);
+        F1 = flip(flip(F1,1),3);
+        for k = 1:2*BR
+            f(:,k,:,:,:) = ifftn(F1(:,k,:,:,:),'symmetric')*(2*BR)^2;
+        end
     end
     
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
@@ -292,10 +296,10 @@ end
 end
 
 
-function [ Fnew ] = integrate( Fold, X, mR, b, G, dt, L, u, d, w, method, precision )
+function [ Fnew ] = integrate( Fold, f, X, mR, b, G, dt, L, u, d, w, method, precision )
 
 u = gpuArray(u);
-dF1 = derivative(gpuArray(Fold),X,mR,b,G,L,u,d,w,precision);
+dF1 = derivative(gpuArray(Fold),f,X,mR,b,G,L,u,d,w,precision);
 
 if strcmpi(method,'euler')
     Fnew = Fold+dt*dF1;
@@ -305,7 +309,7 @@ end
 % midpoint method, RK2 method
 if strcmpi(method,'midpoint') || strcmpi(method,'RK4')
     F2 = Fold+dF1*dt/2;
-    dF2 = derivative(gpuArray(F2),X,mR,b,G,L,u,d,w,precision);
+    dF2 = derivative(gpuArray(F2),[],X,mR,b,G,L,u,d,w,precision);
 
     if strcmpi(method,'midpoint')
         Fnew = Fold+dt*dF2;
@@ -313,7 +317,7 @@ if strcmpi(method,'midpoint') || strcmpi(method,'RK4')
     end
 elseif strcmp(method,'RK2')
     F2 = Fold+dF1*dt;
-    dF2 = derivative(gpuArray(F2),X,mR,b,G,L,u,d,w,precision);
+    dF2 = derivative(gpuArray(F2),[],X,mR,b,G,L,u,d,w,precision);
     
     Fnew = Fold+dt/2*(dF1+dF2);
     return;
@@ -321,10 +325,10 @@ end
 
 % RK4 method
 F3 = Fold + dF2*dt/2;
-dF3 = derivative(gpuArray(F3),X,mR,b,G,L,u,d,w,precision);
+dF3 = derivative(gpuArray(F3),[],X,mR,b,G,L,u,d,w,precision);
 
 F4 = Fold + dF3*dt;
-dF4 = derivative(gpuArray(F4),X,mR,b,G,L,u,d,w,precision);
+dF4 = derivative(gpuArray(F4),[],X,mR,b,G,L,u,d,w,precision);
 
 if strcmpi(method,'RK4')
     Fnew = Fold+1/6*dt*(dF1+2*dF2+2*dF3+dF4);
@@ -334,7 +338,7 @@ end
 end
 
 
-function [ dF ] = derivative( F, X, mR, b, G, L, u, d, w, precision )
+function [ dF ] = derivative( F, f, X, mR, b, G, L, u, d, w, precision )
 
 BR = size(F,3);
 Bx = size(F,4)/2;
@@ -387,28 +391,30 @@ dF = gather(dF);
 clear temp1 temp2
 
 % -mg*cross(rho,R'*e3)
-F1 = zeros(2*BR-1,2*BR,2*BR-1,2*Bx,2*Bx,precision);
-for m = -lmax:lmax
-    for n = -lmax:lmax
-        lmin = max(abs(m),abs(n));
-        F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:);
-        
-        for k = 1:2*BR
-            d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
-            F1(m+lmax+1,k,n+lmax+1,:,:) = sum((2*permute(lmin:lmax,...
-                [1,3,2])+1).*F_mn.*d_jk_betak,3);
+if isempty(f)
+    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,precision);
+    for m = -lmax:lmax
+        for n = -lmax:lmax
+            lmin = max(abs(m),abs(n));
+            F_mn = F(m+lmax+1,n+lmax+1,lmin+1:lmax+1,:,:);
+
+            for k = 1:2*BR
+                d_jk_betak = d(m+lmax+1,n+lmax+1,lmin+1:lmax+1,k);
+                F1(m+lmax+1,k,n+lmax+1,:,:) = sum((2*permute(lmin:lmax,...
+                    [1,3,2])+1).*F_mn.*d_jk_betak,3);
+            end
         end
     end
-end
+    
+    F1 = ifftshift(ifftshift(F1,1),3);
+    F1 = flip(flip(F1,1),3);
 
-F1 = cat(1,F1,zeros(1,2*BR,2*BR-1,2*Bx,2*Bx));
-F1 = cat(3,F1,zeros(2*BR,2*BR,1,2*Bx,2*Bx));
-F1 = ifftshift(ifftshift(F1,1),3);
-F1 = flip(flip(F1,1),3);
-
-f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,precision);
-for k = 1:2*BR
-    f(:,k,:,:,:) = ifftn(F1(:,k,:,:,:))*(2*BR)^2;
+    f = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,precision);
+    for k = 1:2*BR
+        f(:,k,:,:,:) = ifftn(F1(:,k,:,:,:))*(2*BR)^2;
+    end
+else
+    F1 = zeros(2*BR,2*BR,2*BR,2*Bx,2*Bx,precision);
 end
 
 fmR1 = f.*permute(mR(1,:,:,:),[2,3,4,1]);

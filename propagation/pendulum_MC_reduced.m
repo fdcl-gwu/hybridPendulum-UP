@@ -21,7 +21,7 @@ tscale = sqrt(J(1,1)/(m*g*rho(3)));
 bt = b*tscale;
 
 % time
-sf = 100;
+sf = 400;
 T = 1;
 Nt = T*sf+1;
 

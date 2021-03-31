@@ -25,7 +25,7 @@ __host__ void cutensorErrorHandle(const cutensorStatus_t& err)
 	}
 }
 
-__host__ void init_Size_F(Size_F* size_F, int BR, int Bx, int ndims)
+__host__ void init_Size_F(Size_F* size_F, const int BR, const int Bx, const int ndims)
 {
 	size_F->BR = BR;
 	size_F->Bx = Bx;
@@ -71,7 +71,7 @@ __host__ void init_Size_f(Size_f* size_f, const int BR, const int Bx, const int 
 
 	size_f->const_2BR = 2*BR;
 	size_f->const_2Bx = 2*Bx;
-	size_f->const_2BRs = (2*BR) * (2*Bx);
+	size_f->const_2BRs = (2*BR) * (2*BR);
 	size_f->const_2Bxs = (2*Bx) * (2*Bx);
 }
 

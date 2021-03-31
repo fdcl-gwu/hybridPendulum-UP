@@ -358,17 +358,11 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         }
 
         // set up output
-        /* size_t size_out[6] = {size_f.const_2BR, size_f.const_2BR, size_f.const_2BR, size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx};
+        size_t size_out[6] = {size_f.const_2BR, size_f.const_2BR, size_f.const_2BR, size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx};
         plhs[0] = mxCreateUninitNumericArray(ndims, (size_t*) size_out, mymxRealClass, mxREAL);
         myReal* f = mymxGetReal(plhs[0]);
 
-        cudaErrorHandle(cudaMemcpy(f, f_dev, size_f.nTot*sizeof(myReal), cudaMemcpyDeviceToHost)); */
-
-        size_t size_out[6] = {size_f.const_2BR, size_f.const_2BR, size_f.const_2BR, size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx};
-        plhs[0] = mxCreateUninitNumericArray(ndims, (size_t*) size_out, mymxRealClass, mxCOMPLEX);
-        myComplex* F1 = (myComplex*) mymxGetComplex(plhs[0]);
-
-        cudaErrorHandle(cudaMemcpy(F1, F1_dev, size_f.nTot*sizeof(myComplex), cudaMemcpyDeviceToHost));
+        cudaErrorHandle(cudaMemcpy(f, f_dev, size_f.nTot*sizeof(myReal), cudaMemcpyDeviceToHost));
 
         // free memory
         cudaErrorHandle(cudaFree(size_f_dev));
