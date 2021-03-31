@@ -90,6 +90,8 @@ __host__ void fftSO3R_forward(myComplex* F_dev, const myReal* f_dev, const myRea
 	dim3 gridsize_supplement_R(size_f->const_2BR, size_f->const_2BR, size_f->nx);
 	supplement_R <<<gridsize_supplement_R, blocksize_supplement_R>>> (F1_dev, size_f_dev);
 
+	cufftErrorHandle(cufftDestroy(cufft_plan));
+
 	// Fourier transform for x
 	n[0] = size_f->const_2Bx; n[1] = size_f->const_2Bx; n[2] = size_f->const_2Bx;
 	inembed[0] = size_f->const_2Bx; inembed[1] = size_f->const_2Bx; inembed[2] = size_f->const_2Bx;
@@ -108,6 +110,8 @@ __host__ void fftSO3R_forward(myComplex* F_dev, const myReal* f_dev, const myRea
 			}
 		}
 	}
+
+	cufftErrorHandle(cufftDestroy(cufft_plan));
 
 	// fftshift and flip
 	dim3 blocksize_flip(size_f->const_2BR, 1, 1);
@@ -310,6 +314,8 @@ __host__ void fftSO3R_backward(myReal* f, const myComplex* F, const myReal* dl_d
 		}
 	}
 
+	cufftErrorHandle(cufftDestroy(cufft_plan));
+
 	// Fourier transform for R1 and R3
 	myReal* f_dev;
 	cudaErrorHandle(cudaMalloc(&f_dev, size_f->nTot*sizeof(myReal)));
@@ -328,8 +334,11 @@ __host__ void fftSO3R_backward(myReal* f, const myComplex* F, const myReal* dl_d
 		cufftErrorHandle(myfftBackwardExec_R(cufft_plan, (myfftComplex*) F1_dev+ind_f, (myfftReal*) f_dev+ind_f));
 	}
 
+	cufftErrorHandle(cufftDestroy(cufft_plan));
+
 	cudaErrorHandle(cudaMemcpy(f, f_dev, size_f->nTot*sizeof(myReal), cudaMemcpyDeviceToHost));
 
+	// free memory
 	cudaErrorHandle(cudaFree(F_dev));
 	cudaErrorHandle(cudaFree(F1_dev));
 	cudaErrorHandle(cudaFree(F1_temp_dev));
@@ -337,5 +346,8 @@ __host__ void fftSO3R_backward(myReal* f, const myComplex* F, const myReal* dl_d
 	if (worksize_max > 0) {
 		cudaErrorHandle(cudaFree(work));
 	}
+
+	delete[] worksize;
+	delete[] cutensor_plan;
 }
 

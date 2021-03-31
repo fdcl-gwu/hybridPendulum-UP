@@ -112,21 +112,6 @@ if FP == 32
     u = single(u);
 end
 
-% CG coefficient
-warning('off','MATLAB:nearlySingularMatrix');
-
-CG = cell(BR,BR);
-for l1 = 0:lmax
-    for l2 = 0:lmax
-        CG{l1+1,l2+1} = clebsch_gordan(l1,l2);
-        if FP == 32
-            CG{l1+1,l2+1} = single(CG{l1+1,l2+1});
-        end
-    end
-end
-
-warning('on','MATLAB:nearlySingularMatrix');
-
 % Fourier transform of x
 if use_mex
     X = zeros(2*Bx,2*Bx,2,precision);

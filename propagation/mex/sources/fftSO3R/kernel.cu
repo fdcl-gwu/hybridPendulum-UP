@@ -64,6 +64,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         dim3 gridsize_supplement_R(size_f.const_2BR, size_f.const_2BR, size_f.nx);
         supplement_R <<<gridsize_supplement_R, blocksize_supplement_R>>> (F1_dev, size_f_dev);
 
+        cufftErrorHandle(cufftDestroy(cufft_plan));
+
         // Fourier transform for x
         n[0] = size_f.const_2Bx; n[1] = size_f.const_2Bx; n[2] = size_f.const_2Bx;
         inembed[0] = size_f.const_2Bx; inembed[1] = size_f.const_2Bx; inembed[2] = size_f.const_2Bx;
@@ -82,6 +84,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
                 }
             }
         }
+
+        cufftErrorHandle(cufftDestroy(cufft_plan));
 
         // fftshift and flip
         dim3 blocksize_flip(size_f.const_2BR, 1, 1);
@@ -339,6 +343,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             }
         }
 
+        cufftErrorHandle(cufftDestroy(cufft_plan));
+
         // Fourier transform for R1 and R3
         myReal* f_dev;
         cudaErrorHandle(cudaMalloc(&f_dev, size_f.nTot*sizeof(myReal)));
@@ -356,6 +362,8 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
             int ind_f = j*size_f.const_2BR;
             cufftErrorHandle(myfftBackwardExec_R(cufft_plan, (myfftComplex*) F1_dev+ind_f, (myfftReal*) f_dev+ind_f));
         }
+
+        cufftErrorHandle(cufftDestroy(cufft_plan));
 
         // set up output
         size_t size_out[6] = {size_f.const_2BR, size_f.const_2BR, size_f.const_2BR, size_F.const_2Bx, size_F.const_2Bx, size_F.const_2Bx};

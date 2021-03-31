@@ -335,6 +335,8 @@ __host__ void get_dF(myComplex* dF, const myComplex* F, const myReal* f, const m
 	cudaErrorHandle(cudaFree(u_dev));
 	cudaErrorHandle(cudaFree(dF2_temp_dev));
 
+	cublasErrorHandle(cublasDestroy(handle_cublas));
+
 	//////////////////////////////
 	// circular convolutions bX //
 	//////////////////////////////
