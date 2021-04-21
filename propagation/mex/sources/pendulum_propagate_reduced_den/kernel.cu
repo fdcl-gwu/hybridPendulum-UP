@@ -130,7 +130,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     dF1 = new myComplex[size_F.nTot_compact];
     get_dF(dF1, Fold_compact, f, X, mR, b, G, L, u_compact, dw_dev, &size_F, size_F_dev, &size_f, size_f_dev);
 
-    if (stricmp(method,"midpoint") == 0 || stricmp(method,"RK4") == 0) {
+    if (strcasecmp(method,"midpoint") == 0 || strcasecmp(method,"RK4") == 0) {
         // dF2
         myComplex* F2_dev;
         cudaErrorHandle(cudaMalloc(&F2_dev, size_F.nTot_compact*sizeof(myComplex)));
@@ -159,7 +159,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         delete[] f2;
     }
 
-    if (stricmp(method,"RK2") == 0) {
+    if (strcasecmp(method,"RK2") == 0) {
         // dF2
         myComplex* F2_dev;
         cudaErrorHandle(cudaMalloc(&F2_dev, size_F.nTot_compact*sizeof(myComplex)));
@@ -188,7 +188,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         delete[] f2;
     }
 
-    if (stricmp(method,"RK4") == 0) {
+    if (strcasecmp(method,"RK4") == 0) {
         // dF3
         myComplex* F3_dev;
         cudaErrorHandle(cudaMalloc(&F3_dev, size_F.nTot_compact*sizeof(myComplex)));
@@ -265,18 +265,18 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     cudaErrorHandle(cudaMalloc(&dF_dev, size_F.nTot_compact*sizeof(myComplex)));
 
     // calculate
-    if (stricmp(method,"euler") == 0) {
+    if (strcasecmp(method,"euler") == 0) {
         cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyHostToDevice));
         integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_compact);
 
         delete[] dF1;
-    } else if (stricmp(method,"midpoint") == 0) {
+    } else if (strcasecmp(method,"midpoint") == 0) {
         cudaErrorHandle(cudaMemcpy(dF_dev, dF2, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyHostToDevice));
         integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0], size_F.nTot_compact);
 
         delete[] dF1;
         delete[] dF2;
-    } else if (stricmp(method,"RK2") == 0) {
+    } else if (strcasecmp(method,"RK2") == 0) {
         cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyHostToDevice));
         integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/2, size_F.nTot_compact);
 
@@ -285,7 +285,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
         delete[] dF1;
         delete[] dF2;
-    } else if (stricmp(method,"RK4") == 0) {
+    } else if (strcasecmp(method,"RK4") == 0) {
         cudaErrorHandle(cudaMemcpy(dF_dev, dF1, size_F.nTot_compact*sizeof(myComplex), cudaMemcpyHostToDevice));
         integrate_Fnew <<<gridsize_512_nTot, blocksize_512_nTot>>> (Fnew_dev, Fold_dev, dF_dev, dt[0]/6, size_F.nTot_compact);
 

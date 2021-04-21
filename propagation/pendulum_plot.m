@@ -2,7 +2,7 @@ function [  ] = pendulum_plot( varargin )
 
 close all;
 
-addpath('..\rotation3d');
+addpath('../rotation3d');
 
 if (size(varargin{1},1)==3 && size(varargin{1},2)==3)
     isDensity = false;
@@ -38,7 +38,7 @@ if isDensity
     end
     
     if Nt > 0
-        f = load(strcat(path,'\f',num2str(1)));
+        f = load(strcat(path,'/f',num2str(1)));
         f = f.f;
         
         % SO(3) grid
@@ -63,18 +63,18 @@ if isDensity
         d_threshold = 0.4;
         
         try
-            ind_R = load(strcat(path,'\ind_R'));
+            ind_R = load(strcat(path,'/ind_R'));
             ind_R = ind_R.ind_R;
-            v_R = load(strcat(path,'\v_R'));
+            v_R = load(strcat(path,'/v_R'));
             v_R = v_R.v_R;
         catch
             [ind_R,v_R] = interpInd(R,s1,s2,s3,theta,d_threshold);
-            save(strcat(path,'\ind_R'),'ind_R','-v7.3');
-            save(strcat(path,'\v_R'),'v_R','-v7.3');
+            save(strcat(path,'/ind_R'),'ind_R','-v7.3');
+            save(strcat(path,'/v_R'),'v_R','-v7.3');
         end
         
         parfor nt = 1:Nt
-            f = load(strcat(path,'\f',num2str(nt)));
+            f = load(strcat(path,'/f',num2str(nt)));
             f = f.f;
             
             if ~isa(f,'double')
@@ -185,7 +185,7 @@ open(v);
 writeVideo(v,M);
 close(v);
 
-rmpath('..\rotation3d');
+rmpath('../rotation3d');
 
 end
 

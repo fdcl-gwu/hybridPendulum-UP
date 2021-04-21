@@ -49,7 +49,7 @@ tscale = sqrt(J/(m*g*rho));
 
 % time
 sf = 400;
-T = 1;
+T = 4;
 Nt = T*sf+1;
 
 % scaled time
@@ -154,7 +154,7 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     [4,1,2,3]).*Sigma^-1,[1,2])),[1,2,5,3,4])/c/sqrt((2*pi)^2*det(Sigma));
 
 if saveToFile
-    save(strcat(path,'\f1'),'f');
+    save(strcat(path,'/f1'),'f');
 end
 
 % initial Fourier transform
@@ -246,7 +246,7 @@ for nt = 1:Nt-1
         = get_stat(double(f),double(R),double(x),double(w));
     
     if saveToFile
-        save(strcat(path,'\f',num2str(nt+1)),'f');
+        save(strcat(path,'/f',num2str(nt+1)),'f');
     end
     
     toc;
@@ -267,8 +267,8 @@ MFG.Sigma = Sigma;
 MFG.P = P;
 
 if saveToFile
-    save(strcat(path,'\stat'),'stat');
-    save(strcat(path,'\MFG'),'MFG');
+    save(strcat(path,'/stat'),'stat');
+    save(strcat(path,'/MFG'),'MFG');
 end
 
 rmpath('../rotation3d');

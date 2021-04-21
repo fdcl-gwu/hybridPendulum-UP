@@ -8,7 +8,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     char* direction = mxArrayToString(prhs[0]);
     myReal* d = mymxGetReal(prhs[2]);
 
-    if (stricmp(direction,"forward") == 0) {
+    if (strcasecmp(direction,"forward") == 0) {
         // determine dimensions
         myReal* f = mymxGetReal(prhs[1]);
         myReal* w = mymxGetReal(prhs[3]);

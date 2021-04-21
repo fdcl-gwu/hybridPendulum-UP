@@ -244,3 +244,6 @@ TSWLatexianTemp*
 # matlab data or figure
 *.fig
 *.mat
+
+# build directories
+**/build
