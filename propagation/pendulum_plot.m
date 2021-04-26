@@ -9,7 +9,7 @@ if (size(varargin{1},1)==3 && size(varargin{1},2)==3)
     R = varargin{1};
     sf = varargin{2};
     
-    if size(varargin,2) == 3
+    if size(varargin,2) >= 3
         slow = varargin{3};
     end
 else
@@ -18,8 +18,18 @@ else
     L = varargin{2};
     sf = varargin{3};
     
-    if size(varargin,2) == 4
+    if size(varargin,2) >= 4
         slow = varargin{4};
+    end
+    
+    if size(varargin,2) >= 5
+        use_mex = varargin{5};
+    else
+        use_mex = false;
+    end
+    
+    if use_mex
+        addpath('mex');
     end
 end
 
@@ -56,82 +66,129 @@ if isDensity
         s3 = repmat(cos(theta2),Nt1,1);
         
         % circular grid
-        Ntheta = 40;
-        theta = linspace(-pi,pi-2*pi/Ntheta,Ntheta);
+        Nalpha = 40;
+        alpha = linspace(-pi,pi-2*pi/Nalpha,Nalpha);
         
-        % 3d interpolation
-        d_threshold = 0.4;
-        
-        try
-            ind_R = load(strcat(path,'/ind_R'));
-            ind_R = ind_R.ind_R;
-            v_R = load(strcat(path,'/v_R'));
-            v_R = v_R.v_R;
-        catch
-            [ind_R,v_R] = interpInd(R,s1,s2,s3,theta,d_threshold);
-            save(strcat(path,'/ind_R'),'ind_R','-v7.3');
-            save(strcat(path,'/v_R'),'v_R','-v7.3');
+        if ~use_mex
+            % 3d interpolation
+            d_threshold = 0.4;
+
+            try
+                ind_R = load(strcat(path,'/ind_R'));
+                ind_R = ind_R.ind_R;
+                v_R = load(strcat(path,'/v_R'));
+                v_R = v_R.v_R;
+            catch
+                [ind_R,v_R] = interpInd(R,s1,s2,s3,alpha,d_threshold);
+                save(strcat(path,'/ind_R'),'ind_R','-v7.3');
+                save(strcat(path,'/v_R'),'v_R','-v7.3');
+            end
+        else
+            e = get_Euler(reshape(s1,[],1),reshape(s2,[],1),reshape(s3,[],1),alpha);
+            
+            v_R = [];
+            ind_R = [];
         end
         
-        parfor nt = 1:Nt
-            f = load(strcat(path,'/f',num2str(nt)));
-            f = f.f;
-            
-            if ~isa(f,'double')
-                f = double(f);
-            end
-            
-            if ndims(f) == 6
-                fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
-            elseif ndims(f) == 5
-                fR = sum(f,[4,5])*(L/(2*Bx))^2;
-            else
-                error('Dimensions of f is wrong');
-            end
-            fR = reshape(fR,1,[]);
-            
-            c = zeros(Nt1,Nt2,3);
-            for nt1 = 1:Nt1
-                for nt2 = 1:Nt2
-                    for i = 1:3
-                        for ntheta = 1:Ntheta
-                            v = v_R{nt1,nt2,ntheta,i};
-                            ind = ind_R{nt1,nt2,ntheta,i};
-                            if size(v,1) > 1
-                                f_interp = scatteredInterpolant(v',fR(ind_R{nt1,nt2,ntheta,i})');
-                                c(nt1,nt2,i) = c(nt1,nt2,i) + f_interp(zeros(1,size(v,1)));
-                            else
-                                [v,I] = sort(v);
-                                ind = ind(I);
-                                c(nt1,nt2,i) = c(nt1,nt2,i) + interp1(v,fR(ind),0);
+        if ~use_mex
+            parfor nt = 1:Nt
+                f = load(strcat(path,'/f',num2str(nt)));
+                f = f.f;
+
+                if ~isa(f,'double')
+                    f = double(f);
+                end
+
+                if ndims(f) == 6
+                    fR = sum(f,[4,5,6])*(L/(2*Bx))^3;
+                elseif ndims(f) == 5
+                    fR = sum(f,[4,5])*(L/(2*Bx))^2;
+                else
+                    error('Dimensions of f is wrong');
+                end
+                fR = reshape(fR,1,[]);
+
+                c = zeros(Nt1,Nt2,3);
+                for nt1 = 1:Nt1
+                    for nt2 = 1:Nt2
+                        for i = 1:3
+                            for ntheta = 1:Nalpha
+                                v = v_R{nt1,nt2,ntheta,i};
+                                ind = ind_R{nt1,nt2,ntheta,i};
+                                if size(v,1) > 1
+                                    f_interp = scatteredInterpolant(v',fR(ind_R{nt1,nt2,ntheta,i})');
+                                    c(nt1,nt2,i) = c(nt1,nt2,i) + f_interp(zeros(1,size(v,1)));
+                                else
+                                    [v,I] = sort(v);
+                                    ind = ind(I);
+                                    c(nt1,nt2,i) = c(nt1,nt2,i) + interp1(v,fR(ind),0);
+                                end
                             end
                         end
                     end
                 end
-            end
-            
-            c = c/max(c(:));
-            c1 = c(:,:,1);
-            c2 = c(:,:,2);
-            c3 = c(:,:,3);
-            c = ones(size(c));
-            c(:,:,1) = c(:,:,1)-c2-c3;
-            c(:,:,2) = c(:,:,2)-c1-c3;
-            c(:,:,3) = c(:,:,3)-c1-c2;
-            
-            f = figure;
-            surf(s1,s2,s3,c,'LineStyle','none','FaceColor','interp');
-            
-            xlim([-1,1]);
-            ylim([-1,1]);
-            zlim([-1,1]);
-            view([1,-1,0]);
-            axis equal;
-            
-            annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.75,0.16,0.07]);
 
-            M(nt) = getframe;
-            close(f);
+                c = c/max(c(:));
+                c1 = c(:,:,1);
+                c2 = c(:,:,2);
+                c3 = c(:,:,3);
+                c = ones(size(c));
+                c(:,:,1) = c(:,:,1)-c2-c3;
+                c(:,:,2) = c(:,:,2)-c1-c3;
+                c(:,:,3) = c(:,:,3)-c1-c2;
+
+                f = figure;
+                surf(s1,s2,s3,c,'LineStyle','none','FaceColor','interp');
+
+                xlim([-1,1]);
+                ylim([-1,1]);
+                zlim([-1,1]);
+                view([1,-1,0]);
+                axis equal;
+
+                annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.75,0.16,0.07]);
+
+                M(nt) = getframe;
+                close(f);
+            end
+        else
+            for nt = 1:Nt
+                tic;
+                f = load(strcat(path,'/f',num2str(nt)));
+                f = f.f;
+
+                if ~isa(f,'double')
+                    f = double(f);
+                end
+                
+                c = pendulum_plot_getc(f,e,L);
+                c = reshape(c,Nt1,Nt2,3);
+                
+                c = c/max(c(:));
+                c1 = c(:,:,1);
+                c2 = c(:,:,2);
+                c3 = c(:,:,3);
+                c = ones(size(c));
+                c(:,:,1) = c(:,:,1)-c2-c3;
+                c(:,:,2) = c(:,:,2)-c1-c3;
+                c(:,:,3) = c(:,:,3)-c1-c2;
+
+                f = figure;
+                surf(s1,s2,s3,c,'LineStyle','none','FaceColor','interp');
+
+                xlim([-1,1]);
+                ylim([-1,1]);
+                zlim([-1,1]);
+                view([1,-1,0]);
+                axis equal;
+
+                annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.75,0.16,0.07]);
+
+                M(nt) = getframe;
+                close(f);
+                toc;
+                disp(strcat('f',num2str(nt),' finished'));
+            end
         end
     end
 else
@@ -186,6 +243,9 @@ writeVideo(v,M);
 close(v);
 
 rmpath('../rotation3d');
+if isDensity && use_mex
+    rmpath('mex');
+end
 
 end
 
@@ -263,6 +323,36 @@ for i = 1:3
         end
     end
 end
+
+end
+
+
+function [ e ] = get_Euler( s1, s2, s3, alpha )
+
+Ns = length(s1);
+Na = length(alpha);
+
+R = zeros(3,3,Ns,Na,3);
+for ns = 1:Ns
+    rref = [s1(ns);s2(ns);s3(ns)];
+
+    for nd = 1:3
+        Rref = eye(3);
+        jk = setdiff(1:3,nd);
+        Rref(:,nd) = rref;
+        Rref(:,jk) = null(rref');
+        D = eye(3);
+        D(jk(1),jk(1)) = det(Rref);
+        Rref = Rref*D;
+
+        vref = zeros(3,Na);
+        vref(nd,:) = alpha;
+        R(:,:,ns,:,nd) = mulRot(Rref,expRot(vref));
+    end
+end
+
+e = rot2eul(reshape(R,[3,3,Ns*Na*3]),'zyz');
+e = reshape(e,[3,Ns,Na,3]);
 
 end
 

@@ -56,8 +56,8 @@ Nt = T*sf+1;
 dtt = 1/sf/tscale;
 
 % band limit
-BR = 20;
-Bx = 20;
+BR = 30;
+Bx = 30;
 lmax = BR-1;
 
 % grid over SO(3)
@@ -154,7 +154,7 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
     [4,1,2,3]).*Sigma^-1,[1,2])),[1,2,5,3,4])/c/sqrt((2*pi)^2*det(Sigma));
 
 if saveToFile
-    save(strcat(path,'/f1'),'f');
+    save(strcat(path,'/f1'),'f','-v7.3');
 end
 
 % initial Fourier transform
@@ -246,7 +246,7 @@ for nt = 1:Nt-1
         = get_stat(double(f),double(R),double(x),double(w));
     
     if saveToFile
-        save(strcat(path,'/f',num2str(nt+1)),'f');
+        save(strcat(path,'/f',num2str(nt+1)),'f','-v7.3');
     end
     
     toc;
