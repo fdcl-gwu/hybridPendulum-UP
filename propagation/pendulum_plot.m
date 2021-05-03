@@ -227,7 +227,7 @@ else
 end
 
 if isDensity
-    v = VideoWriter(strcat(path,'\R1.avi'));
+    v = VideoWriter(strcat(path,'/R1.avi'));
 else
     v = VideoWriter('R1.avi');
 end

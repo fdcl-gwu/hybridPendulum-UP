@@ -22,7 +22,7 @@ bt = b*tscale;
 
 % time
 sf = 400;
-T = 1;
+T = 4;
 Nt = T*sf+1;
 
 % scaled time

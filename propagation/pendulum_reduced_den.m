@@ -1,9 +1,10 @@
-function [ stat, MFG ] = pendulum_reduced_den( use_mex, method, FP, path )
+function [ stat, MFG ] = pendulum_reduced_den( path, use_mex, method, FP, getc )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
 addpath('..');
 
+%% parse inputs
 if ~exist('use_mex','var') || isempty(use_mex)
     use_mex = false;
 end
@@ -38,7 +39,11 @@ else
     saveToFile = false;
 end
 
-% parameters
+if ~exist('getc','var') || isempty(getc)
+    getc = false;
+end
+
+%% parameters and pre-calculation
 J = 0.0152492;
 rho = 0.0679878;
 m = 1.85480;
@@ -141,7 +146,26 @@ if FP == 32
     G = single(G);
 end
 
-% initial conditions
+%% color settings
+if getc
+    % spherical grid
+    Nt1 = 100;
+    Nt2 = 50;
+    theta1 = linspace(-pi,pi,Nt1);
+    theta2 = linspace(0,pi,Nt2);
+    s1 = cos(theta1)'.*sin(theta2);
+    s2 = sin(theta1)'.*sin(theta2);
+    s3 = repmat(cos(theta2),Nt1,1);
+
+    % circular grid
+    Nalpha = 40;
+    alpha = linspace(-pi,pi-2*pi/Nalpha,Nalpha);
+
+    % get Euler angles on grid
+    e = get_Euler(reshape(s1,[],1),reshape(s2,[],1),reshape(s3,[],1),alpha);
+end
+
+%% initial conditions
 S = diag([15,15,15]);
 U = expRot([pi*2/3,0,0]);
 Miu = [0;0]*tscale;
@@ -155,6 +179,24 @@ f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
 
 if saveToFile
     save(strcat(path,'/f1'),'f','-v7.3');
+end
+
+if getc
+    c = pendulum_plot_getc(f,e,L);
+    c = reshape(c,Nt1,Nt2,3);
+
+    c = c/max(c(:));
+    c1 = c(:,:,1);
+    c2 = c(:,:,2);
+    c3 = c(:,:,3);
+    c = ones(size(c));
+    c(:,:,1) = c(:,:,1)-c2-c3;
+    c(:,:,2) = c(:,:,2)-c1-c3;
+    c(:,:,3) = c(:,:,3)-c1-c2;
+
+    if saveToFile
+        save(strcat(path,'/c1'),'c');
+    end
 end
 
 % initial Fourier transform
@@ -241,15 +283,38 @@ for nt = 1:Nt-1
         end
     end
     
+    % calculate statistics
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
         U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
         = get_stat(double(f),double(R),double(x),double(w));
     
-    if saveToFile
-        save(strcat(path,'/f',num2str(nt+1)),'f','-v7.3');
+    % get color
+    if getc
+        c = pendulum_plot_getc(f,e,L);
+        c = reshape(c,Nt1,Nt2,3);
+        
+        c = c/max(c(:));
+        c1 = c(:,:,1);
+        c2 = c(:,:,2);
+        c3 = c(:,:,3);
+        c = ones(size(c));
+        c(:,:,1) = c(:,:,1)-c2-c3;
+        c(:,:,2) = c(:,:,2)-c1-c3;
+        c(:,:,3) = c(:,:,3)-c1-c2;
+        
+        if saveToFile
+            save(strcat(path,'/c',num2str(nt+1)),'c');
+        end
+    end
+    
+    if rem(nt,4)==0
+        if saveToFile
+            save(strcat(path,'/f',num2str(nt+1)),'f','-v7.3');
+        end
     end
     
     toc;
+    disp(strcat('nt=',num2str(nt),' finished'));
 end
 
 stat.ER = ER;
@@ -521,6 +586,36 @@ catch
     Miu = NaN(3,1);
     Sigma = NaN(3,3);
 end
+
+end
+
+
+function [ e ] = get_Euler( s1, s2, s3, alpha )
+
+Ns = length(s1);
+Na = length(alpha);
+
+R = zeros(3,3,Ns,Na,3);
+for ns = 1:Ns
+    rref = [s1(ns);s2(ns);s3(ns)];
+
+    for nd = 1:3
+        Rref = eye(3);
+        jk = setdiff(1:3,nd);
+        Rref(:,nd) = rref;
+        Rref(:,jk) = null(rref');
+        D = eye(3);
+        D(jk(1),jk(1)) = det(Rref);
+        Rref = Rref*D;
+
+        vref = zeros(3,Na);
+        vref(nd,:) = alpha;
+        R(:,:,ns,:,nd) = mulRot(Rref,expRot(vref));
+    end
+end
+
+e = rot2eul(reshape(R,[3,3,Ns*Na*3]),'zyz');
+e = reshape(e,[3,Ns,Na,3]);
 
 end
 
