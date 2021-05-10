@@ -247,3 +247,9 @@ TSWLatexianTemp*
 
 # build directories
 **/build
+
+# video
+*.avi
+
+# other figure format
+*.svg

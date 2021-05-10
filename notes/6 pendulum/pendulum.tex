@@ -111,7 +111,7 @@ Also, $\theta_0$ is a fixed value given by
 Suppose before collision, the angular velocity is given by $\Omega^-$.
 The collision point in the inertial frame is given by
 \begin{align}
-	\rho_c = r_1 (\sec\theta\cdot e_1 - \tan\theta \cdot t_3).
+	\rho_c = \sec\theta(r_1e_1 + \sqrt{h^2+r_1^2-d^2} \cdot t_3).
 \end{align}
 Thus, the linear velocity at the collision point before collision in the inertial frame is
 \begin{align}
@@ -120,11 +120,11 @@ Thus, the linear velocity at the collision point before collision in the inertia
 The velocity $v_c^-$ can be decomposed into the component along $e_1$, and perpendicular to $e_1$:
 \begin{align}
 	v_c^- &= (R\Omega^-\times\rho_c \cdot e_1)e_1 + v_c^- - (R\Omega^-\times\rho_c \cdot e_1)e_1 \nonumber \\
-	&= -\left(r_1\tan\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1 + v_c^- + \left(r_1\tan\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1.
+	&= \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1 + v_c^- - \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1.
 \end{align}
 So the velocity at the collision point after collision in the inertial frame becomes
 \begin{align}
-	v_c^+ = v_c^- + 2(r_1\tan\theta R(\Omega^-\times e_3)\cdot e_1) e_1.
+	v_c^+ = v_c^- - (1+\epsilon) \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right) e_1.
 \end{align}
 And the angular velocity after collision becomes the solution to
 \begin{align}

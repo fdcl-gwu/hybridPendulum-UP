@@ -23,30 +23,28 @@
 \newcommand{\diag}{\ensuremath{\mathrm{diag}}}
 
 \begin{document}
-	
-\section{Spherical Harmonics}
 
-\subsection{Product Formula}
+\section{Equations of Motion}
 
-Consider the dynamics of a 3D pendulum
+The general equations of motion for a 3D pendulum are given as
 \begin{align}
-	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
-	\diff{\Omega} &= -J^{-1}(\Omega\times J\Omega + mg\rho\times R^Te_3) \diff{t}
+	R^T\diff{R} &= \hat{\Omega}\diff{t}, \\
+	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + JH\diff{W}_t.
 \end{align}
-Suppose $J = \diag(J_1,J_1,J_3)$ and $\rho = [0,0,\rho_z]^T$, then $\diff{\Omega_3}/\diff{t} = 0$.
-So we may assume $\Omega_3\equiv 0$, then the dynamics equation can be reduced to (after adding damping and noises)
+We want to simplify the equations so that the pendulum does not rotate about its body-fixed axial axis.
+Suppose that $J = \diag(J_1,J_2,J_3)$ is diagonal, and $J_1 = J_2$, then $(\Omega\times J\Omega)_3 = J_2\Omega_1\Omega_2 - J_1\Omega_1\Omega_2 = 0$.
+Further assume that $\rho = \begin{bmatrix} 0 & 0 & \rho_z \end{bmatrix}$, then $(\rho\times R^Te_3)_3 = 0$.
+So $d\Omega_3 = 0$ as long as that the third row of $H$ is also zero.
+Let $\Omega_3(t_0) = 0$, $\Omega_3(t)=0$ for all $t\geq t_0$, so the pendulum does not rotate about its $e_3$-axis.
+With these assumptions, the equations of motion can be simplified as
 \begin{align}
-	R^T\diff{R} &= \left(\begin{bmatrix} \Omega_1 & \Omega_2 & 0 \end{bmatrix}^T\right)^\wedge \diff{t} \\
-	\diff{\Omega_1} &= \left( J_1^{-1}mg\rho_zR_{32} - b_1\Omega_1 \right) \diff{t} + H\diff{W^1_t} \\
-	\diff{\Omega_2} &= \left( -J_1^{-1}mg\rho_zR_{31} - b_2\Omega_2 \right) \diff{t} + H\diff{W^2_t}
+	R^T\diff{R} &= \left( \begin{bmatrix} \Omega_1 & \Omega_2 & 0 \end{bmatrix}^T \right)^\wedge \diff{t}, \\
+	\diff{\begin{bmatrix} \Omega_1 \\ \Omega_2 \end{bmatrix}} &= \frac{mg\rho_z}{J_1} \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} \diff{t} + \begin{bmatrix} H_{11} & H_{12} & H_{13} \\ H_{21} & H_{22} & H_{23} \end{bmatrix} \diff{W_t}.
 \end{align}
-Let $\tilde{t} = \tfrac{1}{\alpha} t$, $\tilde{\Omega}_1 = \alpha\Omega_1$ $\tilde{\Omega}_2 = \alpha\Omega_2$, $\tilde{b}_1 = \alpha b_1$, $\tilde{b}_2 = \alpha b_2$, and $\tilde{H} = \alpha^{3/2}H$, where $\alpha = \sqrt{\tfrac{J_1}{mg\rho_z}}$,
-then the dynamics equation becomes
-\begin{align}
-	R^T\diff{R} &= \left(\begin{bmatrix} \tilde{\Omega}_1 & \tilde{\Omega}_2 & 0 \end{bmatrix}^T\right)^\wedge \diff{\tilde{t}} \\
-	\diff{\tilde{\Omega}_1} &= \left( R_{32} - \tilde{b}_1\tilde{\Omega}_1 \right) \diff{\tilde{t}} + \tilde{H} \diff{W^1_{\tilde{t}}} \\
-	\diff{\tilde{\Omega}_2} &= \left( -R_{31} - \tilde{b}_2\tilde{\Omega}_2 \right) \diff{\tilde{t}} + \tilde{H} \diff{W^2_{\tilde{t}}}
-\end{align}
+
+\section{Collision Response}
+
+Suppose the pendulum is cylindrical with radius $r$ and height $h$
 
 \end{document}
 
