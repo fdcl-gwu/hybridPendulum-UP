@@ -1,11 +1,19 @@
-function [  ] = pendulum_reduced_collision( path, noise )
+function [  ] = pendulum_reduced_collision( use_mex, noise, path )
 
 addpath('../../rotation3d');
 addpath('../../matrix Fisher');
 addpath('../../');
 
+if ~exist('use_mex','var') || isempty(use_mex)
+    use_mex = false;
+end
+
 if ~exist('noise','var') || isempty(noise)
     noise = false;
+end
+
+if use_mex
+    addpath('mex/sources/pendulum_reduced_collision/build');
 end
 
 % parameters
@@ -81,37 +89,42 @@ ind_max = theta > (theta0 + theta_t);
 ind_mid = ~ (ind_0 | ind_max);
 ind_n0 = find(~ind_0);
 
-try 
-    data = load('lambda');
-    lambda = data.lambda;
-catch
-    lambda(ind_0) = 0;
-    lambda(ind_max) = lambda_max;
-    lambda(ind_mid) = lambda_max/2*sin(pi/(2*theta_t)*(theta(ind_mid)-theta0)) + lambda_max/2;
-    lambda = reshape(lambda,2*BR,2*BR,2*BR);
+if use_mex
+    [lambda,lambda_cat] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
+else
+    try 
+        data = load('lambda');
+        lambda = data.lambda;
+    catch
+        lambda(ind_0) = 0;
+        lambda(ind_max) = lambda_max;
+        lambda(ind_mid) = lambda_max/2*sin(pi/(2*theta_t)*(theta(ind_mid)-theta0))...
+            + lambda_max/2;
+        lambda = reshape(lambda,2*BR,2*BR,2*BR);
 
-    lambda = repmat(lambda,1,1,1,2*Bx,2*Bx);
-    for iR = 1:2*BR
-        for jR = 1:2*BR
-            for kR = 1:2*BR
-                if ind_0(iR,jR,kR)
-                    continue;
-                else
-                    for ix = 1:2*Bx
-                        for jx = 1:2*Bx
-                            omega = R(:,:,iR,jR,kR)*[x(:,ix,jx);0];
-                            vC = cross(omega,PC(:,iR,jR,kR));
-                            if vC'*[1;0;0] < 0
-                                lambda(iR,jR,kR,ix,jx) = 0;
+        lambda = repmat(lambda,1,1,1,2*Bx,2*Bx);
+        for iR = 1:2*BR
+            for jR = 1:2*BR
+                for kR = 1:2*BR
+                    if ind_0(iR,jR,kR)
+                        continue;
+                    else
+                        for ix = 1:2*Bx
+                            for jx = 1:2*Bx
+                                omega = R(:,:,iR,jR,kR)*[x(:,ix,jx);0];
+                                vC = cross(omega,PC(:,iR,jR,kR));
+                                if vC'*[1;0;0] < 0
+                                    lambda(iR,jR,kR,ix,jx) = 0;
+                                end
                             end
                         end
                     end
                 end
             end
         end
-    end
 
-    save('lambda.mat','lambda');
+        save('lambda.mat','lambda');
+    end
 end
 
 %% Omega_old
@@ -150,28 +163,35 @@ end
 
 %% Omega_new
 if noise
-    try
-        data = load('Omega_new');
-        Omega_new = data.Omega_new;
-    catch
-        Omega_new = zeros(2,length(ind_n0),2*Bx,2*Bx);
-        for nR = 1:length(ind_n0)
-            indR = ind_n0(nR);
-            t = cross(r3(:,indR),[1;0;0]);
-            t = t/sqrt(sum(t.^2));
+    if use_mex
+        Omega_new = getOmega_mex(R,x,lambda_cat,epsilon);
+    else
+        try
+            data = load('Omega_new');
+            Omega_new = data.Omega_new;
+        catch
+            Omega_new = zeros(2,length(ind_n0),2*Bx,2*Bx);
+            for nR = 1:length(ind_n0)
+                if nR == 567
+                    a = 1;
+                end
+                indR = ind_n0(nR);
+                t = cross(r3(:,indR),[1;0;0]);
+                t = t/sqrt(sum(t.^2));
 
-            for ix = 1:2*Bx
-                for jx = 1:2*Bx
-                    omega = R(:,:,indR)*[x(1:2,ix,jx);0];
-                    omega_new = omega - (1+epsilon)*omega'*t*t;
+                for ix = 1:2*Bx
+                    for jx = 1:2*Bx
+                        omega = R(:,:,indR)*[x(1:2,ix,jx);0];
+                        omega_new = omega - (1+epsilon)*omega'*t*t;
 
-                    Omega_new3 = R(:,:,indR)'*omega_new;
-                    Omega_new(:,nR,ix,jx) = Omega_new3(1:2);
+                        Omega_new3 = R(:,:,indR)'*omega_new;
+                        Omega_new(:,nR,ix,jx) = Omega_new3(1:2);
+                    end
                 end
             end
-        end
 
-        save('Omega_new.mat','Omega_new','-v7.3');
+            save('Omega_new.mat','Omega_new','-v7.3');
+        end
     end
 end
 
@@ -197,49 +217,54 @@ end
 for nt = 1:Nt
     tic;
     df = zeros(size(f));
-    for nR = 1:length(ind_n0)
-        indR = ind_n0(nR);
-        [iR,jR,kR] = ind2sub([2*BR,2*BR,2*BR],indR);
-            
-        if ~noise
-            fx = permute(f(iR,jR,kR,:,:),[4,5,1,2,3]);
-            fx = fftshift(fftshift(fx,1),2);
-            Fx = fft2(fx);
-            Fx = fftshift(fftshift(Fx,1),2);
+    
+    if use_mex
+        df = pendulum_reduced_discrete_propagate(f,x,lambda,Omega_new,lambda_cat,Gd);
+    else
+        for nR = 1:length(ind_n0)
+            indR = ind_n0(nR);
+            [iR,jR,kR] = ind2sub([2*BR,2*BR,2*BR],indR);
 
-            fx_max = max(fx,[],'all');
+            if ~noise
+                fx = permute(f(iR,jR,kR,:,:),[4,5,1,2,3]);
+                fx = fftshift(fftshift(fx,1),2);
+                Fx = fft2(fx);
+                Fx = fftshift(fftshift(Fx,1),2);
 
-            for ix = 1:2*Bx
-                for jx = 1:2*Bx
-                    if isnan(Omega_old(1,nR,ix,jx))
-                        df(iR,jR,kR,ix,jx) = -lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
-                    else
-                        F_omega1 = exp(2*pi*1i*(-Bx:Bx-1)'*Omega_old(1,nR,ix,jx)/L);
-                        F_omega2 = exp(2*pi*1i*(-Bx:Bx-1)*Omega_old(2,nR,ix,jx)/L);
-                        f_g = sum(Fx.*F_omega1.*F_omega2,[1,2])/(2*Bx)^2;
-                        f_g = real(f_g);
+                fx_max = max(fx,[],'all');
 
-                        if f_g < fx_max/100
-                            f_g = 0;
+                for ix = 1:2*Bx
+                    for jx = 1:2*Bx
+                        if isnan(Omega_old(1,nR,ix,jx))
+                            df(iR,jR,kR,ix,jx) = -lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
+                        else
+                            F_omega1 = exp(2*pi*1i*(-Bx:Bx-1)'*Omega_old(1,nR,ix,jx)/L);
+                            F_omega2 = exp(2*pi*1i*(-Bx:Bx-1)*Omega_old(2,nR,ix,jx)/L);
+                            f_g = sum(Fx.*F_omega1.*F_omega2,[1,2])/(2*Bx)^2;
+                            f_g = real(f_g);
+
+                            if f_g < fx_max/100
+                                f_g = 0;
+                            end
+
+                            lambda_g = lambda(iR,jR,kR,:,:);
+                            lambda_g = lambda_g(find(lambda_g ~= 0,1,'first'));
+
+                            df(iR,jR,kR,ix,jx) = lambda_g*f_g - lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
                         end
-
-                        lambda_g = lambda(iR,jR,kR,:,:);
-                        lambda_g = lambda_g(find(lambda_g ~= 0,1,'first'));
-
-                        df(iR,jR,kR,ix,jx) = lambda_g*f_g - lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
                     end
                 end
-            end
-        else
-            for ix = 1:2*Bx
-                for jx = 1:2*Bx
-                    dOmega = x(:,ix,jx) - permute(Omega_new(:,iR,:,:),[1,3,4,2]);
-                    f_c = c_normal*exp(-1/2*permute(sum(Gd^-1.*permute(dOmega,...
-                        [1,4,2,3]).*permute(dOmega,[4,1,2,3]),[1,2]),[3,4,1,2]));
-                    
-                    df_in = sum(f_c.*permute(lambda(iR,jR,kR,:,:),[4,5,1,2,3]).*...
-                        permute(f(iR,jR,kR,:,:),[4,5,1,2,3]),[1,2])*dx2;
-                    df(iR,jR,kR,ix,jx) = df_in - lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
+            else
+                for ix = 1:2*Bx
+                    for jx = 1:2*Bx
+                        dOmega = x(:,ix,jx) - permute(Omega_new(:,nR,:,:),[1,3,4,2]);
+                        f_c = c_normal*exp(-1/2*permute(sum(Gd^-1.*permute(dOmega,...
+                            [1,4,2,3]).*permute(dOmega,[4,1,2,3]),[1,2]),[3,4,1,2]));
+
+                        df_in = sum(f_c.*permute(lambda(iR,jR,kR,:,:),[4,5,1,2,3]).*...
+                            permute(f(iR,jR,kR,:,:),[4,5,1,2,3]),[1,2])*dx2;
+                        df(iR,jR,kR,ix,jx) = df_in - lambda(iR,jR,kR,ix,jx)*f(iR,jR,kR,ix,jx);
+                    end
                 end
             end
         end
@@ -256,6 +281,10 @@ end
 rmpath('../../rotation3d');
 rmpath('../../matrix Fisher');
 rmpath('../../');
+
+if use_mex
+    rmpath('mex/sources/pendulum_reduced_collision/build');
+end
 
 end
 
