@@ -6,6 +6,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11")
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(~/libcutensor/include)
 set(src_dir ${PROJECT_SOURCE_DIR}/src)
 
 find_package(Matlab REQUIRED)
@@ -27,8 +28,12 @@ set_property(TARGET getLambda PROPERTY CUDA_ARCHITECTURES 80)
 add_library(getOmega STATIC ${src_dir}/setup.cpp ${src_dir}/getOmega.cu)
 set_property(TARGET getOmega PROPERTY CUDA_ARCHITECTURES 80)
 
+add_library(getFcL STATIC ${src_dir}/setup.cpp ${src_dir}/getFcL.cu)
+set_property(TARGET getFcL PROPERTY CUDA_ARCHITECTURES 80)
+
 add_library(propagate STATIC ${src_dir}/setup.cpp ${src_dir}/propagate.cu)
 set_property(TARGET propagate PROPERTY CUDA_ARCHITECTURES 80)
+target_link_libraries(propagate cublas)
 
 # compile mex
 matlab_add_mex(
@@ -46,9 +51,16 @@ matlab_add_mex(
 )
 
 matlab_add_mex(
+    NAME getFcL_mex
+    SRC ${src_dir}/mexFcL.cpp
+    LINK_TO getFcL
+    R2018a
+)
+
+matlab_add_mex(
     NAME pendulum_reduced_discrete_propagate
     SRC ${src_dir}/mexPropagate.cpp
-    LINK_TO propagate cublas
+    LINK_TO propagate
     R2018a
 )
 

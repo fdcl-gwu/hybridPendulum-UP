@@ -1,10 +1,8 @@
 #include "setup.hpp"
 
-void get_df(myReal* df, const myReal* f, const myReal* x, const myReal* lambda, const myReal* Omega, const char* lambda_cat, const myReal* Gd, Size_f* size_f);
+void get_df(myReal* df, const myReal* f, const myReal* lambda, myReal** const* fcL, const int numR, const int* indR, int* const* lambda_indx, const int* lambda_numx, int* const* fcL_indx1, const int* fcL_numx1, int** const* fcL_indx2, int* const* fcL_numx2, const Size_f* size_f);
 
-__global__ void get_fc(myReal* fc, const myReal* x, const myReal* Omega, const myReal* invGd, const myReal c, const int nn0, const Size_f* size_f);
+__global__ void get_fin(myReal* f_temp, const myReal* f, const int* fcL_indx2, const Size_f* size_f);
 
-__global__ void get_flambda(myReal* flambda, const myReal* f, const myReal* lambda, const myReal dx2, const Size_f* size_f);
-
-__global__ void sub_lambda_f(myReal* df, const myReal* lambda, const myReal* f, const Size_f* size_f);
+__global__ void get_fout(myReal* df, const myReal* f, const myReal lambda, const int* lambda_indx, const int lambda_numx, const Size_f* size_f);
 

@@ -32,7 +32,7 @@ g = 9.8;
 tscale = sqrt(J/(m*g*rho));
 
 epsilon = 0.7;
-Hd = eye(2)*0.2;
+Hd = eye(2)*0.05;
 Gd = Hd*Hd';
 
 % band limit
@@ -90,7 +90,7 @@ ind_mid = ~ (ind_0 | ind_max);
 ind_n0 = find(~ind_0);
 
 if use_mex
-    [lambda,lambda_cat] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
+    [lambda,lambda_indR,lambda_indx] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
 else
     try 
         data = load('lambda');
@@ -164,7 +164,7 @@ end
 %% Omega_new
 if noise
     if use_mex
-        Omega_new = getOmega_mex(R,x,lambda_cat,epsilon);
+        Omega_new = getOmega_mex(R,x,lambda_indR,epsilon);
     else
         try
             data = load('Omega_new');
@@ -172,9 +172,6 @@ if noise
         catch
             Omega_new = zeros(2,length(ind_n0),2*Bx,2*Bx);
             for nR = 1:length(ind_n0)
-                if nR == 567
-                    a = 1;
-                end
                 indR = ind_n0(nR);
                 t = cross(r3(:,indR),[1;0;0]);
                 t = t/sqrt(sum(t.^2));
@@ -196,6 +193,11 @@ if noise
 end
 
 c_normal = 1/(2*pi*sqrt(det(Gd)));
+
+%% fc
+if use_mex
+    [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+end
 
 %% initial conditions
 S = diag([15,15,15]);
@@ -219,7 +221,8 @@ for nt = 1:Nt
     df = zeros(size(f));
     
     if use_mex
-        df = pendulum_reduced_discrete_propagate(f,x,lambda,Omega_new,lambda_cat,Gd);
+        df = pendulum_reduced_discrete_propagate(f,lambda,fcL,lambda_indR,lambda_indx,...
+            fcL_indx1,fcL_indx2);
     else
         for nR = 1:length(ind_n0)
             indR = ind_n0(nR);

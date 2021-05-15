@@ -11,13 +11,12 @@ void cudaErrorHandle(const cudaError_t& err)
     }
 }
 
-__host__ void cublasErrorHandle(const cublasStatus_t& err)
+void cublasErrorHandle(const cublasStatus_t& err)
 {
     if (err != CUBLAS_STATUS_SUCCESS) {
         printf("cuBlas Error %i\n", err);
     }
 }
-
 
 void init_Size_f(Size_f* size_f, const int BR, const int Bx)
 {

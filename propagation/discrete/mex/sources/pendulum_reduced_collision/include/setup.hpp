@@ -22,6 +22,8 @@
     #define mycos cos
     #define mytan tan
 
+    #define mycudaRealType CUDA_R_64F
+    
     #define mycublasdot cublasDdot
 #endif
 
