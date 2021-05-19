@@ -85,8 +85,6 @@ void getFcL(myReal*** fcL, int** fcL_indx1, int* fcL_numx1, int*** fcL_indx2, in
         fcL_indx1[iR] = (int*) realloc(fcL_indx1[iR], fcL_numx1[iR]*sizeof(int));
         fcL_indx2[iR] = (int**) realloc(fcL_indx2[iR], fcL_numx1[iR]*sizeof(int*));
         fcL_numx2[iR] = (int*) realloc(fcL_numx2[iR], fcL_numx1[iR]*sizeof(int));
-
-        printf("No. %d finished, totol: %d.\n", iR+1, nn0);
     }
 
     // free memory

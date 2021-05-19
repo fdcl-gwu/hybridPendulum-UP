@@ -38,8 +38,6 @@ void get_df(myReal* df, const myReal* f, const myReal* lambda, myReal** const* f
             get_fin <<<1, fcL_numx2[iR][ix1]>>> (f_temp_dev, f_dev+indR[iR], fcL_indx2_dev, size_f_dev);
             cublasErrorHandle(mycublasdot(handle_cublas, fcL_numx2[iR][ix1], fcL_dev, 1, f_temp_dev, 1, df_dev+indR[iR]+size_f->nR*fcL_indx1[iR][ix1]));
         }
-
-        printf("fin: No. %d finished\n", iR+1);
     }
 
     // density out

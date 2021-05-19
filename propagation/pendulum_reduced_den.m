@@ -340,7 +340,7 @@ rmpath('../rotation3d');
 rmpath('../matrix Fisher');
 rmpath('..');
 if use_mex
-    addpath('mex');
+    rmpath('mex');
 end
 
 end
