@@ -2,8 +2,9 @@
 
 #include <stdio.h>
 #include <math.h>
+#include "omp.h"
 
-void getFcL(myReal*** fcL, int** fcL_indx1, int* fcL_numx1, int*** fcL_indx2, int** fcL_numx2, const myReal* x, const myReal* Omega, const myReal* lambda, const int nn0, int* const* lambda_indx, const int* lambda_numx, const myReal* Gd, const Size_f* size_f)
+void getFcL(myReal** fcL, int** fcL_indx1, int* fcL_numx1, int** fcL_indx2, int** fcL_numx2, const myReal* x, const myReal* Omega, const myReal* lambda, const int nn0, int* const* lambda_indx, const int* lambda_numx, const myReal* Gd, const Size_f* size_f)
 {
     // pre-calculations
     myReal detGd = Gd[0]*Gd[3] - Gd[2]*Gd[1];
@@ -16,6 +17,17 @@ void getFcL(myReal*** fcL, int** fcL_indx1, int* fcL_numx1, int*** fcL_indx2, in
     invGd[3] = Gd[0]/detGd;
 
     myReal dx2 = (x[2]-x[0]) * (x[2]-x[0]);
+
+    // number of threads
+    int nthread = 32;
+
+    cudaStream_t cudaStreams[nthread];
+    for (int i = 0; i < 32; i++) {
+        cudaStreamCreate(&cudaStreams[i]);
+    }
+
+    // fcL threshold
+    myReal fcL_threshold = 1e-6;
 
     // calculate fc*lambda
     myReal* x_dev;
@@ -34,57 +46,58 @@ void getFcL(myReal*** fcL, int** fcL_indx1, int* fcL_numx1, int*** fcL_indx2, in
     cudaErrorHandle(cudaMalloc(&lambda_indx_dev, size_f->nx*sizeof(int)));
 
     myReal* fcL_x_dev;
-    cudaErrorHandle(cudaMalloc(&fcL_x_dev, size_f->nx*sizeof(myReal)));
+    cudaErrorHandle(cudaMalloc(&fcL_x_dev, size_f->nx*size_f->nx*sizeof(myReal)));
 
-    myReal* fcL_x_temp = (myReal*) malloc(size_f->nx*sizeof(myReal));
+    myReal* fcL_x_temp = (myReal*) malloc(size_f->nx*size_f->nx*sizeof(myReal));
 
     for (int iR = 0; iR < nn0; iR++) {
-        dim3 blocksize_x(256, 1, 1);
-        dim3 gridsize_x((int)lambda_numx[iR]/256+1, 1, 1);
+        dim3 blocksize_x(128, 1, 1);
+        dim3 gridsize_x((int)lambda_numx[iR]/128+1, 1, 1);
 
         cudaErrorHandle(cudaMemcpy(lambda_indx_dev, lambda_indx[iR], lambda_numx[iR]*sizeof(int), cudaMemcpyHostToDevice));
 
-        fcL[iR] = (myReal**) malloc(size_f->nx*sizeof(myReal*));
+        #pragma omp parallel for num_threads(nthread)
+        for (int ix1 = 0; ix1 < size_f->nx; ix1++) {
+            int tid = omp_get_thread_num();
+            get_fcL_x <<<blocksize_x, gridsize_x, 0, cudaStreams[tid]>>> (fcL_x_dev+ix1*lambda_numx[iR], x_dev+2*ix1, Omega_dev+2*iR, lambda[iR], lambda_indx_dev, invGd_dev, nn0, lambda_numx[iR], dx2, c_normal);
+        }
+        
+        fcL[iR] = (myReal*) malloc(size_f->nx*lambda_numx[iR]*sizeof(myReal));
 
         fcL_indx1[iR] = (int*) malloc(size_f->nx*sizeof(int));
-        fcL_indx2[iR] = (int**) malloc(size_f->nx*sizeof(int*));
+        fcL_indx2[iR] = (int*) malloc(size_f->nx*size_f->nx*sizeof(int));
 
         fcL_numx1[iR] = 0;
-        fcL_numx2[iR] = (int*) malloc(size_f->nx*sizeof(int));
+        fcL_numx2[iR] = (int*) malloc((size_f->nx+1)*sizeof(int));
+        fcL_numx2[iR][0] = 0;
 
-        for (int ix = 0; ix < size_f->nx; ix++) {
-            get_fcL_x <<<blocksize_x, gridsize_x>>> (fcL_x_dev, x_dev+2*ix, Omega_dev+2*iR, lambda[iR], lambda_indx_dev, invGd_dev, nn0, lambda_numx[iR], dx2, c_normal);
-            
-            fcL[iR][fcL_numx1[iR]] = (myReal*) malloc(lambda_numx[iR]*sizeof(myReal));
-            fcL_indx2[iR][fcL_numx1[iR]] = (int*) malloc(lambda_numx[iR]*sizeof(int));
-
-            cudaErrorHandle(cudaMemcpy(fcL_x_temp, fcL_x_dev, lambda_numx[iR]*sizeof(myReal), cudaMemcpyDeviceToHost));
-
-            fcL_numx2[iR][fcL_numx1[iR]] = 0;
+        cudaErrorHandle(cudaMemcpy(fcL_x_temp, fcL_x_dev, size_f->nx*lambda_numx[iR]*sizeof(myReal), cudaMemcpyDeviceToHost));
+        
+        int ind_nxx = 0;
+        for (int ix1 = 0; ix1 < size_f->nx; ix1++) {
+            int ind_nxx_old = ind_nxx;
             for (int ix2 = 0; ix2 < lambda_numx[iR]; ix2++) {
-                if (fcL_x_temp[ix2] > 1e-6) {
-                    fcL[iR][fcL_numx1[iR]][fcL_numx2[iR][fcL_numx1[iR]]] = fcL_x_temp[ix2];
-                    fcL_indx2[iR][fcL_numx1[iR]][fcL_numx2[iR][fcL_numx1[iR]]] = lambda_indx[iR][ix2];
-                    fcL_numx2[iR][fcL_numx1[iR]]++;
+                int ind_temp = ix2 + ix1*lambda_numx[iR];
+                if (fcL_x_temp[ind_temp] > fcL_threshold) {
+                    fcL[iR][ind_nxx] = fcL_x_temp[ind_temp];
+                    fcL_indx2[iR][ind_nxx] = lambda_indx[iR][ix2];
+                    ind_nxx++;
                 }
             }
-            
-            if (fcL_numx2[iR][fcL_numx1[iR]] == 0) {
-                free(fcL[iR][fcL_numx1[iR]]);
-                free(fcL_indx2[iR][fcL_numx1[iR]]);
-            } else {
-                fcL[iR][fcL_numx1[iR]] = (myReal*) realloc(fcL[iR][fcL_numx1[iR]], fcL_numx2[iR][fcL_numx1[iR]]*sizeof(myReal));
-                fcL_indx2[iR][fcL_numx1[iR]] = (int*) realloc(fcL_indx2[iR][fcL_numx1[iR]], fcL_numx2[iR][fcL_numx1[iR]]*sizeof(int));
-                
-                fcL_indx1[iR][fcL_numx1[iR]] = ix;
+
+            if (ind_nxx > ind_nxx_old) {
+                fcL_indx1[iR][fcL_numx1[iR]] = ix1;
+                fcL_numx2[iR][fcL_numx1[iR]+1] = ind_nxx;
                 fcL_numx1[iR]++;
             }
         }
 
-        fcL[iR] = (myReal**) realloc(fcL[iR], fcL_numx1[iR]*sizeof(myReal*));
+        fcL[iR] = (myReal*) realloc(fcL[iR], ind_nxx*sizeof(myReal));
         fcL_indx1[iR] = (int*) realloc(fcL_indx1[iR], fcL_numx1[iR]*sizeof(int));
-        fcL_indx2[iR] = (int**) realloc(fcL_indx2[iR], fcL_numx1[iR]*sizeof(int*));
-        fcL_numx2[iR] = (int*) realloc(fcL_numx2[iR], fcL_numx1[iR]*sizeof(int));
+        fcL_indx2[iR] = (int*) realloc(fcL_indx2[iR], ind_nxx*sizeof(int));
+        fcL_numx2[iR] = (int*) realloc(fcL_numx2[iR], (fcL_numx1[iR]+1)*sizeof(int));
+
+        printf("No. %d finished, total: %d\n", iR+1, nn0);
     }
 
     // free memory

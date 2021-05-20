@@ -29,10 +29,10 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     myReal* Gd = mymxGetReal(prhs[4]); 
 
     // compute
-    myReal*** fcL = (myReal***) malloc(nn0*sizeof(myReal**));
+    myReal** fcL = (myReal**) malloc(nn0*sizeof(myReal*));
     int** fcL_indx1 = (int**) malloc(nn0*sizeof(int*));
     int* fcL_numx1 = (int*) malloc(nn0*sizeof(int));
-    int*** fcL_indx2 = (int***) malloc(nn0*sizeof(int**));
+    int** fcL_indx2 = (int**) malloc(nn0*sizeof(int*));
     int** fcL_numx2 = (int**) malloc(nn0*sizeof(int*)); 
 
     getFcL(fcL, fcL_indx1, fcL_numx1, fcL_indx2, fcL_numx2, x, Omega, lambda, nn0, lambda_indx, lambda_numx, Gd, &size_f);
@@ -42,41 +42,42 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     plhs[0] = mxCreateCellArray(1, size_R);
     plhs[1] = mxCreateCellArray(1, size_R);
     plhs[2] = mxCreateCellArray(1, size_R);
+    plhs[3] = mxCreateCellArray(1, size_R);
 
     for (int iR = 0; iR < nn0; iR++) {
+        // fcL
+        mwSize size_x2[1] = {(mwSize)fcL_numx2[iR][fcL_numx1[iR]]};
+        mxArray* fcL_mx = mxCreateNumericArray(1, size_x2, mymxRealClass, mxREAL);
+        mxSetCell(plhs[0], iR, fcL_mx);
+
+        myReal* fcL_out = mymxGetReal(fcL_mx);
+        memcpy(fcL_out, fcL[iR], size_x2[0]*sizeof(myReal));
+        free(fcL[iR]);
+
         // fcL_indx1
         mwSize size_x1[1] = {(mwSize)fcL_numx1[iR]};
         mxArray* fcL_indx1_mx = mxCreateNumericArray(1, size_x1, mxINT32_CLASS, mxREAL);
         mxSetCell(plhs[1], iR, fcL_indx1_mx);
         
-        int* fcL_indx1_temp = mxGetInt32s(fcL_indx1_mx);
-        memcpy(fcL_indx1_temp, fcL_indx1[iR], fcL_numx1[iR]*sizeof(int));
+        int* fcL_indx1_out = mxGetInt32s(fcL_indx1_mx);
+        memcpy(fcL_indx1_out, fcL_indx1[iR], size_x1[0]*sizeof(int));
         free(fcL_indx1[iR]);
-
-        // fcL, fcL_indx2
-        mxArray* fcL_temp = mxCreateCellArray(1, size_x1);
-        mxArray* fcL_indx2_temp = mxCreateCellArray(1, size_x1);
         
-        for (int ix = 0; ix < fcL_numx1[iR]; ix++) {
-            mwSize size_x2[1] = {(mwSize) fcL_numx2[iR][ix]};
-            mxArray* fcL_mx = mxCreateNumericArray(1, size_x2, mymxRealClass, mxREAL);
-            mxArray* fcL_indx2_mx = mxCreateNumericArray(1, size_x2, mxINT32_CLASS, mxREAL);
-            mxSetCell(fcL_temp, ix, fcL_mx);
-            mxSetCell(fcL_indx2_temp, ix, fcL_indx2_mx);
-            
-            myReal* fcL_temp_temp = mymxGetReal(fcL_mx);
-            int* fcL_indx2_temp_temp = mxGetInt32s(fcL_indx2_mx);
-            memcpy(fcL_temp_temp, fcL[iR][ix], fcL_numx2[iR][ix]*sizeof(myReal));
-            memcpy(fcL_indx2_temp_temp, fcL_indx2[iR][ix], fcL_numx2[iR][ix]*sizeof(int));
-            free(fcL[iR][ix]);
-            free(fcL_indx2[iR][ix]);    
-        }
-
-        mxSetCell(plhs[0], iR, fcL_temp);
-        mxSetCell(plhs[2], iR, fcL_indx2_temp);
-
-        free(fcL[iR]);
+        // fcL_indx2
+        mxArray* fcL_indx2_mx = mxCreateNumericArray(1, size_x2, mxINT32_CLASS, mxREAL);
+        mxSetCell(plhs[2], iR, fcL_indx2_mx);
+        
+        int* fcL_indx2_out = mxGetInt32s(fcL_indx2_mx);
+        memcpy(fcL_indx2_out, fcL_indx2[iR], size_x2[0]*sizeof(int));
         free(fcL_indx2[iR]);
+
+        // fcL_numx2
+        size_x1[0]++;
+        mxArray* fcL_numx2_mx = mxCreateNumericArray(1, size_x1, mxINT32_CLASS, mxREAL);
+        mxSetCell(plhs[3], iR, fcL_numx2_mx);
+
+        int* fcL_numx2_out = mxGetInt32s(fcL_numx2_mx);
+        memcpy(fcL_numx2_out, fcL_numx2[iR], size_x1[0]*sizeof(int));
         free(fcL_numx2[iR]);
     }
 

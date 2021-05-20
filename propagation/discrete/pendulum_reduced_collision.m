@@ -14,6 +14,7 @@ end
 
 if use_mex
     addpath('mex/sources/pendulum_reduced_collision/build');
+    % addpath('mex');
 end
 
 % parameters
@@ -195,9 +196,12 @@ end
 c_normal = 1/(2*pi*sqrt(det(Gd)));
 
 %% fc
+tic;
 if use_mex
-    [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+    [fcL,fcL_indx1,fcL_indx2,fcL_numx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+    % [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
 end
+toc;
 
 %% initial conditions
 S = diag([15,15,15]);
@@ -222,7 +226,7 @@ for nt = 1:Nt
     
     if use_mex
         df = pendulum_reduced_discrete_propagate(f,lambda,fcL,lambda_indR,lambda_indx,...
-            fcL_indx1,fcL_indx2);
+            fcL_indx1,fcL_indx2,fcL_numx2);
     else
         for nR = 1:length(ind_n0)
             indR = ind_n0(nR);
