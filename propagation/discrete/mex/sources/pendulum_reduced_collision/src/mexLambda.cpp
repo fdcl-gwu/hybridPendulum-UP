@@ -23,6 +23,11 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     Size_f size_f;
     init_Size_f(&size_f, (int)size_R[2]/2, (int)size_x[1]/2);
 
+    // set up output
+    mwSize size_PC[4] = {3, (mwSize)size_f.const_2BR, (mwSize)size_f.const_2BR, (mwSize)size_f.const_2BR};
+    plhs[3] = mxCreateNumericArray(4, size_PC, mymxRealClass, mxREAL);
+    myReal* PC = mymxGetReal(plhs[3]);
+
     // compute
     myReal* lambda = (myReal*) malloc(size_f.nR*sizeof(myReal));
     int* lambda_indR = (int*) malloc(size_f.nR*sizeof(int));
@@ -33,7 +38,7 @@ void mexFunction (int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
     }
     int* lambda_numx = (int*) calloc(size_f.nR, sizeof(int));
 
-    getLambda(lambda, lambda_indR, &lambda_numR, lambda_indx, lambda_numx, R, x, d, h, r, thetat, lambda_max, &size_f);
+    getLambda(lambda, lambda_indR, &lambda_numR, lambda_indx, lambda_numx, PC, R, x, d, h, r, thetat, lambda_max, &size_f);
     
     // set up output
     mwSize size_lambda[1] = {(mwSize) lambda_numR};

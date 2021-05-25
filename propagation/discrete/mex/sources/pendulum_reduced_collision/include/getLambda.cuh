@@ -1,6 +1,6 @@
 #include "setup.hpp"
 
-void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lmabda_max, const Size_f* size_f);
+void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, myReal* PC, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lmabda_max, const Size_f* size_f);
 
 __global__ void getTheta(myReal* theta, char* lambda_cat, const myReal* R, const myReal theta0, const myReal thetat, const Size_f* size_f);
 

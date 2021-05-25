@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(pendulum_plot_getc LANGUAGES CXX CUDA)
+project(discrete_propagation LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CUDA_STANDARD 14)
@@ -30,6 +30,9 @@ set_property(TARGET getOmega PROPERTY CUDA_ARCHITECTURES 80)
 add_library(getFcL STATIC ${src_dir}/setup.cpp ${src_dir}/getFcL.cu)
 set_property(TARGET getFcL PROPERTY CUDA_ARCHITECTURES 80)
 
+add_library(getIndRule STATIC ${src_dir}/setup.cpp ${src_dir}/getIndRule.cu)
+set_property(TARGET getIndRule PROPERTY CUDA_ARCHITECTURES 80)
+
 add_library(propagate STATIC ${src_dir}/setup.cpp ${src_dir}/propagate.cu)
 set_property(TARGET propagate PROPERTY CUDA_ARCHITECTURES 80)
 target_link_libraries(propagate cublas)
@@ -53,6 +56,13 @@ matlab_add_mex(
     NAME getFcL_mex
     SRC ${src_dir}/mexFcL.cpp
     LINK_TO getFcL
+    R2018a
+)
+
+matlab_add_mex(
+    NAME getIndRule_mex
+    SRC ${src_dir}/mexIndRule.cpp
+    LINK_TO getIndRule
     R2018a
 )
 

@@ -3,7 +3,7 @@
 
 #include "getLambda.cuh"
 
-void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lambda_max, const Size_f* size_f)
+void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, myReal* PC, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lambda_max, const Size_f* size_f)
 {
     // theta0
     myReal theta0;
@@ -46,6 +46,7 @@ void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_
     cudaErrorHandle(cudaMalloc(&PC_dev, 3*size_f->nR*sizeof(myReal)));
 
     getPC <<<gridsize_R, blocksize_R>>> (PC_dev, R_dev, theta_dev, *h, *r, size_f_dev);
+    cudaErrorHandle(cudaMemcpy(PC, PC_dev, 3*size_f->nR*sizeof(myReal), cudaMemcpyDeviceToHost));
 
     // get labmda
     dim3 blocksize_indR(512, 1, 1);

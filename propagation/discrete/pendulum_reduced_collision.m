@@ -91,7 +91,7 @@ ind_mid = ~ (ind_0 | ind_max);
 ind_n0 = find(~ind_0);
 
 if use_mex
-    [lambda,lambda_indR,lambda_indx] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
+    [lambda,lambda_indR,lambda_indx,PC] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
 else
     try 
         data = load('lambda');
@@ -130,42 +130,48 @@ end
 
 %% Omega_old
 if ~noise
-    try
-        data = load('Omega_old');
-        Omega_old = data.Omega_old;
-    catch
-        Omega_old = zeros(2,length(ind_n0),2*Bx,2*Bx);
-        for nR = 1:length(ind_n0)
-            indR = ind_n0(nR);
-            t = cross(r3(:,indR),[1;0;0]);
-            t = t/sqrt(sum(t.^2));
+    if use_mex
+        Omega_old = getOmega_mex(R,x,lambda_indR,epsilon,PC,'old');
+    else
+        try
+            data = load('Omega_old');
+            Omega_old = data.Omega_old;
+        catch
+            Omega_old = zeros(2,length(ind_n0),2*Bx,2*Bx);
+            for nR = 1:length(ind_n0)
+                indR = ind_n0(nR);
+                t = cross(r3(:,indR),[1;0;0]);
+                t = t/sqrt(sum(t.^2));
 
-            for ix = 1:2*Bx
-                for jx = 1:2*Bx
-                    omega = R(:,:,indR)*[x(1:2,ix,jx);0];
-                    omega_old = omega - (1+epsilon)/epsilon*omega'*t*t;
-                    vC_old = cross(omega_old,PC(:,indR));
+                for ix = 1:2*Bx
+                    for jx = 1:2*Bx
+                        omega = R(:,:,indR)*[x(1:2,ix,jx);0];
+                        omega_old = omega - (1+epsilon)/epsilon*omega'*t*t;
+                        vC_old = cross(omega_old,PC(:,indR));
 
-                    if sum(omega_old > L/2 | omega_old < -L/2) > 0
-                        Omega_old(:,nR,ix,jx) = [nan;nan];
-                    elseif vC_old'*[1;0;0] < 0
-                        Omega_old(:,nR,ix,jx) = [nan;nan];
-                    else
-                        Omega_old3 = R(:,:,indR)'*omega_old;
-                        Omega_old(:,nR,ix,jx) = Omega_old3(1:2);
+                        if vC_old'*[1;0;0] < 0
+                            Omega_old(:,nR,ix,jx) = [nan;nan];
+                        else
+                            Omega_old3 = R(:,:,indR)'*omega_old;
+                            if sum(Omega_old3(1:2) < -L/2+1e-10 | Omega_old3(1:2) > L/2-L/(2*Bx)-1e-10)
+                                Omega_old(:,nR,ix,jx) = [nan;nan];
+                            else
+                                Omega_old(:,nR,ix,jx) = Omega_old3(1:2);
+                            end
+                        end
                     end
                 end
             end
-        end
 
-        save('Omega_old.mat','Omega_old','-v7.3');
+            save('Omega_old.mat','Omega_old','-v7.3');
+        end
     end
 end
 
 %% Omega_new
 if noise
     if use_mex
-        Omega_new = getOmega_mex(R,x,lambda_indR,epsilon);
+        Omega_new = getOmega_mex(R,x,lambda_indR,epsilon,PC,'new');
     else
         try
             data = load('Omega_new');
@@ -195,13 +201,15 @@ end
 
 c_normal = 1/(2*pi*sqrt(det(Gd)));
 
-%% fc
-tic;
+%% mex pre-calculation
 if use_mex
-    [fcL,fcL_indx1,fcL_indx2,fcL_numx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
-    % [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+    if noise
+        [fcL,fcL_indx1,fcL_indx2,fcL_numx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+        % [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+    else
+        [ind_interp,coeff_interp] = getIndRule_mex(x,Omega_old);
+    end
 end
-toc;
 
 %% initial conditions
 S = diag([15,15,15]);
@@ -225,8 +233,13 @@ for nt = 1:Nt
     df = zeros(size(f));
     
     if use_mex
-        df = pendulum_reduced_discrete_propagate(f,lambda,fcL,lambda_indR,lambda_indx,...
-            fcL_indx1,fcL_indx2,fcL_numx2);
+        if ~noise
+            df = pendulum_reduced_discrete_propagate(false,f,lambda,...
+                lambda_indR,lambda_indx,ind_interp,coeff_interp);
+        else
+            df = pendulum_reduced_discrete_propagate(true,f,lambda,...
+                lambda_indR,lambda_indx,fcL,fcL_indx1,fcL_indx2,fcL_numx2);
+        end
     else
         for nR = 1:length(ind_n0)
             indR = ind_n0(nR);
