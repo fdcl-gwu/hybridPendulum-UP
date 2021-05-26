@@ -1,6 +1,10 @@
 #include "setup.hpp"
 
-void getFcL(myReal** fcL, int** fcL_indx1, int* fcL_numx1, int** fcL_indx2, int** fcL_numx2, const myReal* x, const myReal* Omega, const myReal* lambda, const int nn0, int* const* lambda_indx, const int* lambda_numbx, const myReal* Gd, const Size_f* size_f);
+void getFcL(myReal* fcL, short* fcL_indx, const myReal* x, const myReal* Omega, const myReal* lambda, const int numR, const myReal* Gd, const int nD, const Size_f* size_f);
 
-__global__ void get_fcL_x(myReal* fcL_x, const myReal* x, const myReal* Omega, const myReal lambda, const int* lambda_indx, const myReal* invGd, const int nn0, const int lambda_numx, const myReal dx2, const myReal c_normal);
+__global__ void get_fc(myReal* fc_x2, const myReal* x, const myReal* Omega, const myReal* invGd, const int numR, const myReal c_normal);
+
+__global__ void get_fc_normal(myReal* fc, const myReal* fc_normal, const short* fc_indx, const int numR);
+
+__global__ void get_fcL(myReal* fcL, const myReal* lambda, const short* fcL_indx, const myReal dx2);
 

@@ -88,7 +88,7 @@ for nt = 1:Nt+1
     M(nt) = getframe(fig);
 end
 
-v = VideoWriter(strcat(path,'/x2_nonoise.avi'));
+v = VideoWriter(strcat(path,'/x2_noise.avi'));
 v.FrameRate = 10;
 open(v);
 writeVideo(v,M);

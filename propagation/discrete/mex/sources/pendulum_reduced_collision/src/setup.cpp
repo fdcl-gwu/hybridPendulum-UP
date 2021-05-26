@@ -18,6 +18,13 @@ void cublasErrorHandle(const cublasStatus_t& err)
     }
 }
 
+void cutensorErrorHandle(const cutensorStatus_t& err)
+{
+    if (err != CUTENSOR_STATUS_SUCCESS) {
+        printf("cuTensor Error %i\n", err);
+    }
+}
+
 void init_Size_f(Size_f* size_f, const int BR, const int Bx)
 {
     size_f->BR = BR;

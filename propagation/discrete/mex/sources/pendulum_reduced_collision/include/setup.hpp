@@ -5,6 +5,7 @@
 #include "device_launch_parameters.h"
 
 #include "cublas_v2.h"
+#include "cutensor.h"
 
 #define FP32 false
 #if FP32
@@ -23,6 +24,7 @@
     #define mytan tan
 
     #define mycudaRealType CUDA_R_64F
+    #define mycutensor_computetype CUTENSOR_COMPUTE_64F
     
     #define mycublasdot cublasDdot
 #endif
@@ -45,6 +47,7 @@ struct Size_f {
 
 void cudaErrorHandle(const cudaError_t& err);
 void cublasErrorHandle(const cublasStatus_t& err);
+void cutensorErrorHandle(const cutensorStatus_t& err);
 
 void init_Size_f(Size_f* size_f, const int BR, const int Bx);
 

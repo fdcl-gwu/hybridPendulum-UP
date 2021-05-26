@@ -91,7 +91,15 @@ ind_mid = ~ (ind_0 | ind_max);
 ind_n0 = find(~ind_0);
 
 if use_mex
-    [lambda,lambda_indR,lambda_indx,PC] = getLambda_mex(R,x,d,h,r,theta_t,lambda_max);
+    if ~noise
+        [lambda,lambda_indR,lambda_indx,PC] = getLambda_mex(R,x,d,h,r,...
+            theta_t,lambda_max,true);
+    else
+        [lambda,lambda_indR,PC] = getLambda_mex(R,x,d,h,r,...
+            theta_t,lambda_max,false);
+%         [lambda,lambda_indR,lambda_indx,PC] = getLambda_mex(R,x,d,h,r,...
+%             theta_t,lambda_max,true);
+    end
 else
     try 
         data = load('lambda');
@@ -204,8 +212,15 @@ c_normal = 1/(2*pi*sqrt(det(Gd)));
 %% mex pre-calculation
 if use_mex
     if noise
-        [fcL,fcL_indx1,fcL_indx2,fcL_numx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
-        % [fcL,fcL_indx1,fcL_indx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+        try
+            load(strcat('fcL',num2str(BR),num2str(Bx),'.mat'),'fcL');
+            load(strcat('fcL',num2str(BR),num2str(Bx),'.mat'),'fcL_indx');
+        catch
+            nD = int32(10);
+            [fcL,fcL_indx] = getFcL_mex(x,Omega_new,lambda,Gd,nD);
+            % [fcL,fcL_indx1,fcL_indx2,fcL_numx2] = getFcL_mex(x,Omega_new,lambda,lambda_indx,Gd);
+            save(strcat('fcL',num2str(BR),num2str(Bx),'.mat'),'fcL','fcL_indx','-v7.3');
+        end
     else
         [ind_interp,coeff_interp] = getIndRule_mex(x,Omega_old);
     end
@@ -238,7 +253,7 @@ for nt = 1:Nt
                 lambda_indR,lambda_indx,ind_interp,coeff_interp);
         else
             df = pendulum_reduced_discrete_propagate(true,f,lambda,...
-                lambda_indR,lambda_indx,fcL,fcL_indx1,fcL_indx2,fcL_numx2);
+                lambda_indR,fcL,fcL_indx);
         end
     else
         for nR = 1:length(ind_n0)

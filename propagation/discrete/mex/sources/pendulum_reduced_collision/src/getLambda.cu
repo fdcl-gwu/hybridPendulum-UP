@@ -3,7 +3,95 @@
 
 #include "getLambda.cuh"
 
-void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, myReal* PC, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lambda_max, const Size_f* size_f)
+void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, myReal* PC, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lambda_max, const Size_f* size_f)
+{
+    // theta0
+    myReal theta0;
+    theta0 = myasin(*d/mysqrt(*h**h + *r**r)) - myasin(*r/mysqrt(*h**h+*r**r));
+
+    // compute theta
+    dim3 blocksize_R(size_f->const_2BR, 1, 1);
+    dim3 gridsize_R(size_f->const_2BRs, 1, 1);
+    
+    myReal* R_dev;
+    cudaErrorHandle(cudaMalloc(&R_dev, 9*size_f->nR*sizeof(myReal)));
+    cudaErrorHandle(cudaMemcpy(R_dev, R, 9*size_f->nR*sizeof(myReal), cudaMemcpyHostToDevice));
+
+    myReal* theta_dev;
+    cudaErrorHandle(cudaMalloc(&theta_dev, size_f->nR*sizeof(myReal)));
+
+    char* lambda_cat_dev;
+    cudaErrorHandle(cudaMalloc(&lambda_cat_dev, size_f->nR*sizeof(char)));
+
+    Size_f* size_f_dev;
+    cudaErrorHandle(cudaMalloc(&size_f_dev, sizeof(Size_f)));
+    cudaErrorHandle(cudaMemcpy(size_f_dev, size_f, sizeof(Size_f), cudaMemcpyHostToDevice));
+
+    getTheta <<<gridsize_R, blocksize_R>>>(theta_dev, lambda_cat_dev, R_dev, theta0, *thetat, size_f_dev);
+
+    // get lambda_indR
+    char* lambda_cat = (char*) malloc(size_f->nR*sizeof(char));
+    cudaErrorHandle(cudaMemcpy(lambda_cat, lambda_cat_dev, size_f->nR*sizeof(char), cudaMemcpyDeviceToHost));
+
+    *lambda_numR = 0;
+    for (int iR = 0; iR < size_f->nR; iR++) {
+        if (lambda_cat[iR] != 0) {
+            lambda_indR[*lambda_numR] = iR;
+            (*lambda_numR)++;
+        }
+    }
+
+    // compute PC
+    myReal* PC_dev;
+    cudaErrorHandle(cudaMalloc(&PC_dev, 3*size_f->nR*sizeof(myReal)));
+
+    getPC <<<gridsize_R, blocksize_R>>> (PC_dev, R_dev, theta_dev, *h, *r, size_f_dev);
+    cudaErrorHandle(cudaMemcpy(PC, PC_dev, 3*size_f->nR*sizeof(myReal), cudaMemcpyDeviceToHost));
+
+    // get labmda
+    dim3 blocksize_indR(512, 1, 1);
+    dim3 gridsize_indR((int) *lambda_numR/512+1, 1, 1);
+    
+    myReal* lambda_dev;
+    cudaErrorHandle(cudaMalloc(&lambda_dev, (*lambda_numR)*size_f->nx*sizeof(myReal)));
+
+    int* lambda_indR_dev;
+    cudaErrorHandle(cudaMalloc(&lambda_indR_dev, (*lambda_numR)*sizeof(int)));
+    cudaErrorHandle(cudaMemcpy(lambda_indR_dev, lambda_indR, (*lambda_numR)*sizeof(int), cudaMemcpyHostToDevice));
+
+    compute_lambda <<<gridsize_indR, blocksize_indR>>> (lambda_dev, lambda_cat_dev, lambda_indR_dev, theta_dev, theta0, *thetat, *lambda_max, *lambda_numR);
+
+    cudaErrorHandle(cudaMemcpy(lambda, lambda_dev, (*lambda_numR)*sizeof(myReal), cudaMemcpyDeviceToHost));
+
+    // expand lambda
+    myReal* x_dev;
+    cudaErrorHandle(cudaMalloc(&x_dev, 2*size_f->nx*sizeof(myReal)));
+    cudaErrorHandle(cudaMemcpy(x_dev, x, 2*size_f->nx*sizeof(myReal), cudaMemcpyHostToDevice));
+
+    for (int ix = 1; ix < size_f->nx; ix++) {
+        cudaErrorHandle(cudaMemcpy(lambda_dev+ix*(*lambda_numR), lambda_dev, (*lambda_numR)*sizeof(myReal), cudaMemcpyDeviceToDevice));
+    }
+
+    dim3 blocksize_n0Rx(size_f->const_2Bx, 1, 1);
+    dim3 gridsize_n0Rx(size_f->const_2Bx, *lambda_numR, 1);
+
+    expand_lambda <<<gridsize_n0Rx, blocksize_n0Rx>>> (lambda_dev, R_dev, x_dev, PC_dev, lambda_indR_dev);
+    cudaErrorHandle(cudaMemcpy(lambda, lambda_dev, (*lambda_numR)*size_f->nx*sizeof(myReal), cudaMemcpyDeviceToHost));
+
+    // free memroy
+    cudaErrorHandle(cudaFree(R_dev));
+    cudaErrorHandle(cudaFree(theta_dev));
+    cudaErrorHandle(cudaFree(lambda_cat_dev));
+    cudaErrorHandle(cudaFree(size_f_dev));
+    cudaErrorHandle(cudaFree(PC_dev));
+    cudaErrorHandle(cudaFree(lambda_dev));
+    cudaErrorHandle(cudaFree(lambda_indR_dev));
+    cudaErrorHandle(cudaFree(x_dev));
+    
+    free(lambda_cat);
+}
+
+void getLambda_compact(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_indx, int* lambda_numx, myReal* PC, const myReal* R, const myReal* x, const myReal* d, const myReal* h, const myReal* r, const myReal* thetat, const myReal* lambda_max, const Size_f* size_f)
 {
     // theta0
     myReal theta0;
@@ -75,7 +163,7 @@ void getLambda(myReal* lambda, int* lambda_indR, int* lambda_numR, int** lambda_
     dim3 gridsize_x(size_f->const_2Bx, 1, 1);
 
     for (int iR = 0; iR < *lambda_numR; iR++) {
-        expand_lambda <<<gridsize_x, blocksize_x>>> (lambda_indx_dev, R_dev+lambda_indR[iR]*9, x_dev, PC_dev+lambda_indR[iR]*3, size_f_dev);
+        get_indx <<<gridsize_x, blocksize_x>>> (lambda_indx_dev, R_dev+lambda_indR[iR]*9, x_dev, PC_dev+lambda_indR[iR]*3, size_f_dev);
         
         cudaErrorHandle(cudaMemcpy(lambda_indx[iR], lambda_indx_dev, size_f->nx*sizeof(int), cudaMemcpyDeviceToHost));
 
@@ -143,7 +231,7 @@ __global__ void compute_lambda(myReal* lambda, const char* lambda_cat, const int
     }
 }
 
-__global__ void expand_lambda(int* lambda_indx, const myReal* R, const myReal* x, const myReal* PC, const Size_f* size_f)
+__global__ void get_indx(int* lambda_indx, const myReal* R, const myReal* x, const myReal* PC, const Size_f* size_f)
 {
     int indx = threadIdx.x + blockIdx.x*size_f->const_2Bx;
     int indx2 = indx*2;
@@ -156,3 +244,24 @@ __global__ void expand_lambda(int* lambda_indx, const myReal* R, const myReal* x
 
     lambda_indx[indx] = (vC < 0.0) ? 0 : 1;
 }
+
+__global__ void expand_lambda(myReal* lambda, const myReal* R, const myReal* x, const myReal* PC, const int* indR)
+{
+    int indx = threadIdx.x + blockIdx.x*blockDim.x;
+    int indtot = blockIdx.y + indx*gridDim.y;
+
+    int indR9 = indR[blockIdx.y]*9;
+    int indR3 = indR[blockIdx.y]*3;
+    indx = indx*2;
+
+    myReal omega[2];
+    omega[0] = R[indR9+1]*x[indx] + R[indR9+4]*x[indx+1];
+    omega[1] = R[indR9+2]*x[indx] + R[indR9+5]*x[indx+1];
+
+    myReal vC = omega[0]*PC[indR3+2] - omega[1]*PC[indR3+1];
+
+    if (vC < 0.0) {
+        lambda[indtot] = 0.0;
+    }
+}
+

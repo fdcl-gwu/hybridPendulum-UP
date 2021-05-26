@@ -2,86 +2,122 @@
 
 #include <math.h>
 #include <stdio.h>
-#include "omp.h"
 
-void get_df_noise(myReal* df, const myReal* f, const myReal* lambda, myReal* const* fcL, const int numR, const int* indR, int* const* lambda_indx, const int* lambda_numx, int* const* fcL_indx1, const int* fcL_numx1, int* const* fcL_indx2, int* const* fcL_numx2, const Size_f* size_f)
+void get_df_noise(myReal* df, const myReal* f, const myReal* lambda, const myReal* fcL, const int numR, const int* indR, const short* fcL_indx, const int nD, const Size_f* size_f)
 {
-    // number of threads
-    int nthread = size_f->nx;
-    cudaStream_t cudaStreams[nthread];
-    for (int i = 0; i < nthread; i++) {
-        cudaErrorHandle(cudaStreamCreate(&cudaStreams[i]));
-    }
-
-    // maximum memory needed
-    int max_numx2 = 0;
-    for (int iR = 0; iR < numR; iR++) {
-        max_numx2 = (max_numx2 < fcL_numx2[iR][fcL_numx1[iR]]) ? fcL_numx2[iR][fcL_numx1[iR]] : max_numx2;
-    }
-
-    // density in
-    myReal* fcL_dev;
-    cudaErrorHandle(cudaMalloc(&fcL_dev, max_numx2*sizeof(myReal)));
-
-    int* fcL_indx2_dev;
-    cudaErrorHandle(cudaMalloc(&fcL_indx2_dev, max_numx2*sizeof(int)));
-
+    // set up fold
     myReal* f_dev;
     cudaErrorHandle(cudaMalloc(&f_dev, size_f->nTot*sizeof(myReal)));
     cudaErrorHandle(cudaMemcpy(f_dev, f, size_f->nTot*sizeof(myReal), cudaMemcpyHostToDevice));
+
+    int* indR_dev;
+    cudaErrorHandle(cudaMalloc(&indR_dev, numR*sizeof(int)));
+    cudaErrorHandle(cudaMemcpy(indR_dev, indR, numR*sizeof(int), cudaMemcpyHostToDevice));
+
+    short* fcL_indx_dev;
+    cudaErrorHandle(cudaMalloc(&fcL_indx_dev, nD*numR*size_f->nx*sizeof(short)));
+    cudaErrorHandle(cudaMemcpy(fcL_indx_dev, fcL_indx, nD*numR*size_f->nx*sizeof(short), cudaMemcpyHostToDevice));
 
     Size_f* size_f_dev;
     cudaErrorHandle(cudaMalloc(&size_f_dev, sizeof(Size_f)));
     cudaErrorHandle(cudaMemcpy(size_f_dev, size_f, sizeof(Size_f), cudaMemcpyHostToDevice));
 
-    myReal* f_temp_dev;
-    cudaErrorHandle(cudaMalloc(&f_temp_dev, max_numx2*sizeof(myReal)));
+    myReal* fold_dev;
+    cudaErrorHandle(cudaMalloc(&fold_dev, nD*numR*size_f->nx*sizeof(myReal)));
 
+    dim3 blocksize_fcL(nD, size_f->const_2Bx, 1);
+    dim3 gridsize_fcL(size_f->const_2Bx, numR, 1);
+
+    get_fold_noise <<<gridsize_fcL, blocksize_fcL>>> (fold_dev, f_dev, indR_dev, fcL_indx_dev, size_f_dev);
+
+    // calculate fin
+    myReal* fcL_dev;
+    cudaErrorHandle(cudaMalloc(&fcL_dev, nD*numR*size_f->nx*sizeof(myReal)));
+    cudaErrorHandle(cudaMemcpy(fcL_dev, fcL, nD*numR*size_f->nx*sizeof(myReal), cudaMemcpyHostToDevice));
+
+    myReal* fin_dev;
+    cudaErrorHandle(cudaMalloc(&fin_dev, numR*size_f->nx*sizeof(myReal)));
+
+    cutensorHandle_t handle;
+    cutensorInit(&handle);
+
+    int32_t mode_fold[3] = {'x','R','y'};
+    int32_t mode_fcL[3] = {'x','R','y'};
+    int32_t mode_fin[2] = {'R','y'};
+
+    int64_t extent_fold[3] = {nD, numR, size_f->nx};
+    int64_t extent_fcL[3] = {nD, numR, size_f->nx};
+    int64_t extent_fin[2] = {numR, size_f->nx};
+
+    cutensorTensorDescriptor_t desc_fold;
+    cutensorTensorDescriptor_t desc_fcL;
+    cutensorTensorDescriptor_t desc_fin;
+    cutensorErrorHandle(cutensorInitTensorDescriptor(&handle, &desc_fold, 3, extent_fold, NULL, mycudaRealType, CUTENSOR_OP_IDENTITY));
+    cutensorErrorHandle(cutensorInitTensorDescriptor(&handle, &desc_fcL, 3, extent_fcL, NULL, mycudaRealType, CUTENSOR_OP_IDENTITY));
+    cutensorErrorHandle(cutensorInitTensorDescriptor(&handle, &desc_fin, 2, extent_fin, NULL, mycudaRealType, CUTENSOR_OP_IDENTITY));
+
+    uint32_t alignment_fold;
+    uint32_t alignment_fcL;
+    uint32_t alignment_fin;
+    cutensorErrorHandle(cutensorGetAlignmentRequirement(&handle, fold_dev, &desc_fold, &alignment_fold));
+    cutensorErrorHandle(cutensorGetAlignmentRequirement(&handle, fcL_dev, &desc_fcL, &alignment_fcL));
+    cutensorErrorHandle(cutensorGetAlignmentRequirement(&handle, fin_dev, &desc_fin, &alignment_fin));
+
+    cutensorContractionDescriptor_t desc;
+    cutensorErrorHandle(cutensorInitContractionDescriptor(&handle, &desc, &desc_fold, mode_fold, alignment_fold,
+        &desc_fcL, mode_fcL, alignment_fcL,
+        &desc_fin, mode_fin, alignment_fin,
+        &desc_fin, mode_fin, alignment_fin, mycutensor_computetype));
+
+    cutensorContractionFind_t find;
+    cutensorErrorHandle(cutensorInitContractionFind(&handle, &find, CUTENSOR_ALGO_DEFAULT));
+
+    size_t worksize;
+    cutensorErrorHandle(cutensorContractionGetWorkspace(&handle, &desc, &find, CUTENSOR_WORKSPACE_RECOMMENDED, &worksize));
+    void* workspace = nullptr;
+    if (worksize > 0) {
+        cudaErrorHandle(cudaMalloc(&workspace, worksize));
+    }
+
+    cutensorContractionPlan_t plan;
+    cutensorErrorHandle(cutensorInitContractionPlan(&handle, &plan, &desc, &find, worksize));
+
+    myReal alpha = 1.0;
+    myReal beta = 0.0;
+
+    cutensorErrorHandle(cutensorContraction(&handle, &plan, &alpha, fold_dev, fcL_dev, &beta, fin_dev, fin_dev, workspace, worksize, 0));
+
+    // free memory
+    cudaErrorHandle(cudaFree(fcL_indx_dev));
+    cudaErrorHandle(cudaFree(fold_dev));
+    cudaErrorHandle(cudaFree(fcL_dev));
+
+    if (worksize > 0) {
+        cudaErrorHandle(cudaFree(workspace));
+    }
+
+    // compute fout
     myReal* df_dev;
     cudaErrorHandle(cudaMalloc(&df_dev, size_f->nTot*sizeof(myReal)));
     cudaErrorHandle(cudaMemset(df_dev, 0, size_f->nTot*sizeof(myReal)));
 
-    cublasHandle_t handle_cublas;
-    cublasCreate(&handle_cublas);
+    myReal* lambda_dev;
+    cudaErrorHandle(cudaMalloc(&lambda_dev, numR*size_f->nx*sizeof(myReal)));
+    cudaErrorHandle(cudaMemcpy(lambda_dev, lambda, numR*size_f->nx*sizeof(myReal), cudaMemcpyHostToDevice));
 
-    for (int iR = 0; iR < numR; iR++) {
-        int numx2 = fcL_numx2[iR][fcL_numx1[iR]];
-        cudaErrorHandle(cudaMemcpy(fcL_dev, fcL[iR], numx2*sizeof(myReal), cudaMemcpyHostToDevice));
-        cudaErrorHandle(cudaMemcpy(fcL_indx2_dev, fcL_indx2[iR], numx2*sizeof(int), cudaMemcpyHostToDevice));
-
-        get_fold_noise <<<(int)numx2/128+1, 128>>> (f_temp_dev, f_dev+indR[iR], fcL_indx2_dev, numx2, size_f_dev);
-
-        for (int ix1 = 0; ix1 < fcL_numx1[iR]; ix1++) {
-            int n = fcL_numx2[iR][ix1+1] - fcL_numx2[iR][ix1];
-
-            cublasErrorHandle(cublasSetStream(handle_cublas, cudaStreams[ix1]));
-            cublasErrorHandle(mycublasdot(handle_cublas, n, fcL_dev+fcL_numx2[iR][ix1], 1, f_temp_dev+fcL_numx2[iR][ix1], 1, df_dev+indR[iR]+size_f->nR*fcL_indx1[iR][ix1]));
-        }
-
-        printf("No. %d finished, total: %d\n", iR, numR);
-    }
-
-    // density out
-    int* lambda_indx_dev;
-    cudaErrorHandle(cudaMalloc(&lambda_indx_dev, size_f->nx*sizeof(int)));
-
-    for (int iR = 0; iR < numR; iR++) {
-        cudaErrorHandle(cudaMemcpy(lambda_indx_dev, lambda_indx[iR], lambda_numx[iR]*sizeof(int), cudaMemcpyHostToDevice));
-        get_fout <<<(int)lambda_numx[iR]/128+1, 128>>> (df_dev+indR[iR], f_dev+indR[iR], lambda[iR], lambda_indx_dev, lambda_numx[iR], size_f_dev);
-    }
-
+    dim3 blocksize_n0Rx(size_f->const_2Bx, 1, 1);
+    dim3 gridsize_n0Rx(size_f->const_2Bx, numR, 1);
+    
+    get_fout_noise <<<gridsize_n0Rx, blocksize_n0Rx>>> (df_dev, fin_dev, f_dev, lambda_dev, indR_dev, size_f_dev);
     cudaErrorHandle(cudaMemcpy(df, df_dev, size_f->nTot*sizeof(myReal), cudaMemcpyDeviceToHost));
 
     // free memory
-    cudaErrorHandle(cudaFree(fcL_dev));
-    cudaErrorHandle(cudaFree(fcL_indx2_dev));
     cudaErrorHandle(cudaFree(f_dev));
+    cudaErrorHandle(cudaFree(indR_dev));
     cudaErrorHandle(cudaFree(size_f_dev));
-    cudaErrorHandle(cudaFree(f_temp_dev));
+    cudaErrorHandle(cudaFree(fin_dev));
     cudaErrorHandle(cudaFree(df_dev));
-    cudaErrorHandle(cudaFree(lambda_indx_dev));
-
-    cublasErrorHandle(cublasDestroy(handle_cublas));
+    cudaErrorHandle(cudaFree(lambda_dev));
 }
 
 void get_df_nonoise(myReal* df, const myReal* f, const myReal* lambda, const int numR, const int* indR, int* const* lambda_indx, const int* lambda_numx, const int* ind_interp, const myReal* coeff_interp, const Size_f* size_f)
@@ -126,7 +162,7 @@ void get_df_nonoise(myReal* df, const myReal* f, const myReal* lambda, const int
 
     for (int iR = 0; iR < numR; iR++) {
         cudaErrorHandle(cudaMemcpy(lambda_indx_dev, lambda_indx[iR], lambda_numx[iR]*sizeof(int), cudaMemcpyHostToDevice));
-        get_fout <<<(int)lambda_numx[iR]/128+1, 128>>> (df_dev+indR[iR], f_dev+indR[iR], lambda[iR], lambda_indx_dev, lambda_numx[iR], size_f_dev);
+        get_fout_nonoise <<<(int)lambda_numx[iR]/128+1, 128>>> (df_dev+indR[iR], f_dev+indR[iR], lambda[iR], lambda_indx_dev, lambda_numx[iR], size_f_dev);
     }
 
     cudaErrorHandle(cudaMemcpy(df, df_dev, size_f->nTot*sizeof(myReal), cudaMemcpyDeviceToHost));
@@ -142,14 +178,12 @@ void get_df_nonoise(myReal* df, const myReal* f, const myReal* lambda, const int
     cudaErrorHandle(cudaFree(lambda_indx_dev));
 }
 
-__global__ void get_fold_noise(myReal* f_temp, const myReal* f, const int* fcL_indx2, const int fcL_numx2, const Size_f* size_f)
+__global__ void get_fold_noise(myReal* f_old, const myReal* f, const int* indR, const short* fcL_indx, const Size_f* size_f)
 {
-    int ind_temp = threadIdx.x + blockIdx.x*blockDim.x;
+    int ind_fcL = threadIdx.x + blockIdx.y*blockDim.x + (threadIdx.y+blockIdx.x*blockDim.y)*blockDim.x*gridDim.y;
+    int ind_f = indR[blockIdx.y] + fcL_indx[ind_fcL]*size_f->nR;
 
-    if (ind_temp < fcL_numx2) {
-        int indf = fcL_indx2[ind_temp]*size_f->nR;
-        f_temp[ind_temp] = f[indf];
-    }
+    f_old[ind_fcL] = f[ind_f];
 }
 
 __global__ void get_fin_nonoise(myReal* df, const myReal* f, const myReal* lambda, const int* indR, const int* ind_interp, const myReal* coeff_interp, const Size_f* size_f)
@@ -176,7 +210,16 @@ __global__ void get_fin_nonoise(myReal* df, const myReal* f, const myReal* lambd
     }
 }
 
-__global__ void get_fout(myReal* df, const myReal* f, const myReal lambda, const int* lambda_indx, const int lambda_numx, const Size_f* size_f)
+__global__ void get_fout_noise(myReal* df, const myReal* fin, const myReal* f, const myReal* lambda, const int* indR, const Size_f* size_f)
+{
+    int indx = threadIdx.x + blockIdx.x*blockDim.x;
+    int indf = indR[blockIdx.y] + indx*size_f->nR;
+    int indfin = blockIdx.y + indx*gridDim.y;
+
+    df[indf] = fin[indfin] - f[indf]*lambda[indfin];
+}
+
+__global__ void get_fout_nonoise(myReal* df, const myReal* f, const myReal lambda, const int* lambda_indx, const int lambda_numx, const Size_f* size_f)
 {
     int indx = threadIdx.x + blockIdx.x*blockDim.x;
     if (indx < lambda_numx) {

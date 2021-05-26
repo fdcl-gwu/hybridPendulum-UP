@@ -12,6 +12,7 @@ find_package(CUDA REQUIRED)
 find_package(OpenMP REQUIRED)
 
 include_directories("${CUDA_INCLUDE_DIRS}")
+include_directories(~/libcutensor/include)
 
 if(OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -27,7 +28,7 @@ set_property(TARGET getLambda PROPERTY CUDA_ARCHITECTURES 80)
 add_library(getOmega STATIC ${src_dir}/setup.cpp ${src_dir}/getOmega.cu)
 set_property(TARGET getOmega PROPERTY CUDA_ARCHITECTURES 80)
 
-add_library(getFcL STATIC ${src_dir}/setup.cpp ${src_dir}/getFcL.cu)
+add_library(getFcL SHARED ${src_dir}/setup.cpp ${src_dir}/getFcL.cu)
 set_property(TARGET getFcL PROPERTY CUDA_ARCHITECTURES 80)
 
 add_library(getIndRule STATIC ${src_dir}/setup.cpp ${src_dir}/getIndRule.cu)
@@ -35,7 +36,7 @@ set_property(TARGET getIndRule PROPERTY CUDA_ARCHITECTURES 80)
 
 add_library(propagate STATIC ${src_dir}/setup.cpp ${src_dir}/propagate.cu)
 set_property(TARGET propagate PROPERTY CUDA_ARCHITECTURES 80)
-target_link_libraries(propagate cublas)
+target_link_libraries(propagate ~/libcutensor/lib/11/libcutensor.so)
 
 # compile mex
 matlab_add_mex(
