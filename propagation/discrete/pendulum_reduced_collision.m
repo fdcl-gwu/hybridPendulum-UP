@@ -13,8 +13,8 @@ if ~exist('noise','var') || isempty(noise)
 end
 
 if use_mex
-    addpath('mex/sources/pendulum_reduced_collision/build');
-    % addpath('mex');
+    % addpath('mex/sources/pendulum_reduced_collision/build');
+    addpath('mex');
 end
 
 % parameters
@@ -97,8 +97,6 @@ if use_mex
     else
         [lambda,lambda_indR,PC] = getLambda_mex(R,x,d,h,r,...
             theta_t,lambda_max,false);
-%         [lambda,lambda_indR,lambda_indx,PC] = getLambda_mex(R,x,d,h,r,...
-%             theta_t,lambda_max,true);
     end
 else
     try 

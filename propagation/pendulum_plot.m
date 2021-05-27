@@ -179,7 +179,7 @@ if isDensity
                 xlim([-1,1]);
                 ylim([-1,1]);
                 zlim([-1,1]);
-                view([0,1,-1]);
+                view([0,-1,-1]);
                 axis equal;
 
                 annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),'Position',[0.15,0.75,0.16,0.07]);
