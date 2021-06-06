@@ -33,47 +33,39 @@
 The dynamical model for a hinged 3D pendulum is
 \begin{align*}
 	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
-	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 \right) \diff{t} + JH\diff{W}_t,
+	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 - B\Omega \right) \diff{t} + JH\diff{W}_t,
 \end{align*}
-where $J\in\real^{3\times 3}$ is the moment of inertia matrix, $\rho$ is the vector from the pivot point to the center of mass expressed in the body-fixed frame.
+where $J\in\real^{3\times 3}$ is the moment of inertia matrix, $\rho$ is the vector from the pivot point to the center of mass expressed in the body-fixed frame, and $B = \diag(b_1,b_2,b_3)$ is a damping.
 The Fokker-Planck equation is
 \begin{align} \label{eqn:FP}
-	\frac{\partial p(R,\Omega,t)}{\partial t} = -\sum_{i=1}^{3} \liediff_i (\Omega_ip(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3)_i p(R,\Omega,t)\right] + \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 p(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
+	\frac{\partial p(R,\Omega,t)}{\partial t} = &-\sum_{i=1}^{3} \liediff_i (\Omega_ip(R,\Omega,t)) + \sum_{i=1}^{3} \frac{\partial}{\partial \Omega_i} \left[(\Omega\times J\Omega + mg\rho\times R^Te_3 + B\Omega)_i p(R,\Omega,t)\right] \nonumber \\ 
+	&+ \sum_{i,j=1}^{3} G_{ij} \frac{\partial^2 p(R,\Omega,t)}{\partial \Omega_i \partial \Omega_j}.
 \end{align}
 Let $F^l_{m,n,i,j,k}[p]$ be the Fourier coefficient of the probability density, then it satisfies the following ordinary different equation
 \begin{align} \label{eqn:FP Fourier}
-	\frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} = &-\sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha (\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3)_\alpha p] \right] \nonumber \\
+	\frac{\diff{F^l_{m,n,i,j,k}[p]}}{\diff{t}} = &-\sum_{\alpha=1}^3 F^l_{m,n,i,j,k}[\liediff_\alpha (\Omega_\alpha p)] + \sum_{\alpha=1}^3 F^l_{m,n,i,j,k}\left[ \frac{\partial}{\partial \Omega_\alpha}[(\Omega\times J\Omega + mg\rho\times R^Te_3 + B\Omega)_\alpha p] \right] \nonumber \\
 	&+ \sum_{\alpha,\beta=1}^3 G_{\alpha\beta} F^l_{m,n,i,j,k}\left[ \frac{\partial^2 p}{\partial\Omega_\alpha \partial\Omega_\beta} \right].
 \end{align}
 
 \section{Shape and Moment of Inertia}
 
-Suppose the pendulum is a cylinder tube (Figure \ref{fig:pendulum}).
-It is made of three materials: steel (red), aluminum (yellow), and acrylic (blue), and their densities are $\rho_1 = \SI{8050}{\kilogram\per\meter^3}$, $\rho_2 = \SI{2710}{\kilogram\per\meter^3}$, and $\rho_3 = \SI{1180}{\kilogram\per\meter^3}$ respectively.
-The mass of the pendulum is
+Suppose the pendulum is a cylinder (Figure \ref{fig:pendulum}).
+It is made of aluminum, whose density is $\rho_a = \SI{2710}{\kilogram\per\meter^3}$.
+Then its mass is
 \begin{align}
-	m = 0.5\pi(r_1^2-r_2^2)h_1(\rho_1+\rho_2) + \pi(r_1^2-r_2^2)h_2\rho_3 = \SI{1.85480}{\kilogram}.
+	m = \pi r^2h\rho_a = \SI{1.0642}{\kilogram}.
 \end{align}
-The center of mass in the body-fixed frame is $\rho = \begin{bmatrix} 0 & 0 & \rho_z \end{bmatrix}^T$ where $\rho_z$ is
+The center of mass in the body-fixed frame is
 \begin{align}
-	\rho_z = \frac{0.5(\rho_1+\rho_2)h_1 \cdot 0.5h_1 + \rho_3h_2(h_1+0.5h_2)}{0.5(\rho_1+\rho_2)h_1 + \rho_3h_2} = \SI{0.0679878}{\meter}.
+	\rho = \begin{bmatrix} 0 & 0 & \rho_z \end{bmatrix}^T = \begin{bmatrix} 0 & 0 & 0.1 \end{bmatrix}^T \SI{}{\meter}.
 \end{align}
-The moment of inertial along body-fixed $e_1$-axis is
+The moment of inertia along the $e_1$ and $e_2$ axes are
 \begin{align}
-	J_{11} &= 2\int_0^{h_1}\int_{r_2}^{r_1}\int_{\frac{\pi}{4}}^{\frac{3\pi}{4}} (r^2\sin^2\theta + z^2) r\rho_1 \diff{\theta} \diff{r} \diff{z} + 2\int_0^{h_1}\int_{r_2}^{r_1}\int_{-\frac{\pi}{4}}^{\frac{\pi}{4}} (r^2\sin^2\theta + z^2) r\rho_2 \diff{\theta} \diff{r} \diff{z} \nonumber \\
-	&\qquad\qquad + \int_{h_1}^{h_1+h_2} \int_{r_1}^{r_2} \int_0^{2\pi} (r^2\sin^2\theta + z^2) r\rho_2 \diff{\theta} \diff{r} \diff{z} \nonumber \\
-	&= \left( \frac{\pi+2}{8}\rho_1 + \frac{\pi-2}{8}\rho_2 \right)h_1(r_1^4-r_2^4) + \frac{\pi}{6} h_1^3(r_1^2-r_2^r)(\rho_1+\rho_2) + \frac{\pi}{4}(r_1^4-r_2^4)h_2\rho_3 \nonumber \\
-	&\qquad\qquad + \frac{\pi}{3}(r_1^2-r_2^2)((h_1+h_2)^3-h_1^3)\rho_3 = \SI{0.0152492}{\kilogram\cdot\meter^2},
+	J_1 = J_2 = \tfrac{1}{4}mr^2 + \tfrac{1}{2}mh^2 = \SI{0.01436}{\kilogram\cdot\meter^2},
 \end{align}
-Similarly, the moment of inertial along body-fixed $e_2$-axis is
+and the moment of inertia along the $e_3$ axis is
 \begin{align}
-	J_{22} &= \left( \frac{\pi-2}{8}\rho_1 + \frac{\pi+2}{8}\rho_2 \right)h_1(r_1^4-r_2^4) + \frac{\pi}{6} h_1^3(r_1^2-r_2^r)(\rho_1+\rho_2) + \frac{\pi}{4}(r_1^4-r_2^4)h_2\rho_3 \nonumber \\
-	&\qquad\qquad + \frac{\pi}{3}(r_1^2-r_2^2)((h_1+h_2)^3-h_1^3)\rho_3 = \SI{0.0142639}{\kilogram\cdot\meter^2}.
-\end{align}
-The moment of inertial along body-fixed $e_3$-axis is
-\begin{align}
-	J_{33} &= \int_0^{h_1} \int_{r_1}^{r_2} \int_0^{\pi} r^3(\rho_1+\rho_2) \diff{\theta} \diff{r} \diff{z} + \int_{h_1}^{h_1+h_2} \int_{r_1}^{r_2} \int_0^\pi r^3\rho_3 \diff{\theta} \diff{r} \diff{z} \nonumber \\
-	&= \frac{\pi}{4}(r_1^4-r_2^4)h_1(\rho_1+\rho_2) + \frac{\pi}{2}(r_1^4-r_2^4)h_2\rho_3 = \SI{0.00380233}{\kilogram\cdot\meter^2}
+	J_3 = \tfrac{1}{2}mr^2 = \SI{0.0003326}{\kilogram\cdot\meter^2}
 \end{align}
 
 \begin{figure}
@@ -82,54 +74,34 @@ The moment of inertial along body-fixed $e_3$-axis is
 	\caption{Dimensions of the pendulum \label{fig:pendulum}}
 \end{figure}
 
+\subsection{Simplified Model}
+
+Let $\Omega = \begin{bmatrix} \Omega_1 & \Omega_2 & \Omega_3 \end{bmatrix}^T$, and suppose $\Omega_3 = 0$ when $t=0$.
+Since $J_1 = J_2$, we have
+\begin{align}
+	(\Omega\times J\Omega)_3 = \Omega_1\cdot J_2\Omega_2 - \Omega_2\cdot J_1\Omega_1= 0.
+\end{align}
+Also, since $mg\rho\times R^Te_3$ is perpendicular to $\rho$, we have $(mg\rho\times R^Te_3)_3 = 0$.
+This means if there is no noise along $e_3$, $\Omega_3$ will never change, i.e., $\Omega_3 \equiv 0$.
+Hence, the equation of motion can be simplified as
+\begin{align}
+	R^T\diff{R} &= \left( \begin{bmatrix} \Omega_1 & \Omega_2 & 0 \end{bmatrix}^T \right)^\wedge \diff{t} \\
+	\diff{\begin{bmatrix} \Omega_1 \\ \Omega_2 \end{bmatrix}} &= \left( \frac{mg\rho_z}{J_1} \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} - \begin{bmatrix} b_1\Omega_1 \\ b_2\Omega_2 \end{bmatrix} \right) \diff{t} + H\diff{W}_t,
+\end{align}
+where $H\in\real^{2\times 2}$, and $W_t$ is a two dimensional Wiener process.
+
 \subsection{Scale Gravity}
 
-Let $t = \alpha\tilde{t}$, and $\Omega = \tfrac{1}{\alpha}\tilde{\Omega}$, then the equation of motion can be rewritten as
+Let $t = \alpha\tilde{t}$, and $\Omega_1 = \tfrac{1}{\alpha}\tilde{\Omega}_1$, $\Omega_2 = \tfrac{1}{\alpha}\tilde{\Omega}_2$, then the simplified equation of motion can be rewritten as
 \begin{align*}
-	R^T\diff{R} &= \hat{\tilde{\Omega}} \diff{\tilde{t}} \\
-	J\diff{\tilde{\Omega}} &= (-\tilde{\Omega}\times J\tilde{\Omega} - \alpha^2mg\rho\times R^Te_3) \diff{\tilde{t}} + \alpha^{3/2} JH \diff{W_{\tilde{t}}}.
+	R^T\diff{R} &= \left( \begin{bmatrix} \tilde{\Omega}_1 & \tilde{\Omega}_2 & 0 \end{bmatrix}^T \right)^\vee \diff{\tilde{t}} \\
+	\diff{\begin{bmatrix} \tilde{\Omega}_1 \\ \tilde{\Omega}_2 \end{bmatrix}} &= \left( \frac{\alpha^2mg\rho_z}{J_1} \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} - \alpha\begin{bmatrix} b_1\tilde{\Omega}_1 \\ b_2\tilde{\Omega}_2 \end{bmatrix} \right) \diff{\tilde{t}} + \alpha^{3/2}H\diff{W_{\tilde{t}}}.
 \end{align*}
-Using the above equations, we can define $\tilde{g} = \alpha^2 g$ as an arbitrary number.
-Let $\alpha^2 = \frac{J_{11}}{mg\rho_z}$, $\tilde{J} = \frac{1}{J_{11}}J$, and $\tilde{H} = \alpha^{3/2}H$, then the above equations can be further simplified as
+Then, let $\alpha^2 = \frac{J_1}{mg\rho_z}$, $\tilde{B} = \alpha B$, and $\tilde{H} = \alpha^{3/2}H$, the equation motion can be simplified as
 \begin{align*}
-	R^T\diff{R} &= \hat{\tilde{\Omega}} \diff{\tilde{t}} \\
-	\diff{\tilde{\Omega}} &= \tilde{J}^{-1} (-\tilde{\Omega}\times \tilde{J}\tilde{\Omega} - e_3\times R^Te_3) \diff{\tilde{t}} + \tilde{H}\diff{W_{\tilde{t}}}.
+	R^T\diff{R} &= \left( \begin{bmatrix} \tilde{\Omega}_1 & \tilde{\Omega}_2 & 0 \end{bmatrix}^T \right)^\vee \diff{\tilde{t}} \\
+	\diff{\begin{bmatrix} \tilde{\Omega}_1 \\ \tilde{\Omega}_2 \end{bmatrix}} &= \left( \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} - \begin{bmatrix} \tilde{b}_1\tilde{\Omega}_1 \\ \tilde{b}_2\tilde{\Omega}_2 \end{bmatrix} \right) \diff{\tilde{t}} + \tilde{H}\diff{W_{\tilde{t}}}.
 \end{align*}
-
-\section{Elastic Collision}
-Suppose there is a wall perpendicular to $e_1$-axis, which intersects $e_1$-axis at $b$.
-Then the collision criterion is given by $\theta \geq \theta_0$, where $\theta$ is the angle between the body-fixed $e_3$ axis and the inertial $e_2$-$e_3$ plane.
-More specifically, $\theta$ is given by
-\begin{align}
-	\theta = 90^\circ - \arccos(t_3 \cdot e_1),
-\end{align}
-where $t_3$ is the third column of $R$.
-Also, $\theta_0$ is a fixed value given by
-\begin{align}
-	\theta_0 = \arcsin\left(\frac{b}{\sqrt{h^2+r_1^2}}\right) - \arcsin\left(\frac{r_1}{\sqrt{h^2+r_1^2}}\right).
-\end{align}
-Suppose before collision, the angular velocity is given by $\Omega^-$.
-The collision point in the inertial frame is given by
-\begin{align}
-	\rho_c = \sec\theta(r_1e_1 + \sqrt{h^2+r_1^2-d^2} \cdot t_3).
-\end{align}
-Thus, the linear velocity at the collision point before collision in the inertial frame is
-\begin{align}
-	v_c^- = R\Omega^- \times \rho_c.
-\end{align}
-The velocity $v_c^-$ can be decomposed into the component along $e_1$, and perpendicular to $e_1$:
-\begin{align}
-	v_c^- &= (R\Omega^-\times\rho_c \cdot e_1)e_1 + v_c^- - (R\Omega^-\times\rho_c \cdot e_1)e_1 \nonumber \\
-	&= \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1 + v_c^- - \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right)e_1.
-\end{align}
-So the velocity at the collision point after collision in the inertial frame becomes
-\begin{align}
-	v_c^+ = v_c^- - (1+\epsilon) \left(\sqrt{h^2+r_1^2-d^2} \sec\theta R(\Omega^-\times e_3)\cdot e_1\right) e_1.
-\end{align}
-And the angular velocity after collision becomes the solution to
-\begin{align}
-	R\Omega^+ \times \rho_c = v_c^+.
-\end{align}
 
 \section{Marginal Density}
 
