@@ -25,16 +25,16 @@ if ~exist('getc','var') || isempty(getc)
 end
 
 % parameters
-J = 0.0152492;
-rho = 0.0679878;
-m = 1.85480;
+J = 0.01436;
+rho = 0.1;
+m = 1.0642;
 g = 9.8;
 
-dWall = 0.15;
+dWall = 0.12;
 h = 0.2;
-r = 0.05;
+r = 0.025;
 
-epsilon = 1.0;
+epsilon = 0.8;
 Hd = eye(2)*0.05;
 Gd = Hd*Hd';
 
@@ -47,7 +47,7 @@ tscale = sqrt(J/(m*g*rho));
 
 % time
 sf = 400;
-T = 2;
+T = 1;
 Nt = T*sf+1;
 
 % scaled parameters

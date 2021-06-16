@@ -44,9 +44,9 @@ if ~exist('getc','var') || isempty(getc)
 end
 
 %% parameters and pre-calculation
-J = 0.0152492;
-rho = 0.0679878;
-m = 1.85480;
+J = 0.01436;
+rho = 0.1;
+m = 1.0642;
 g = 9.8;
 
 % scaled parameters
@@ -91,7 +91,7 @@ for i = 1:2*BR
 end
 
 % grid over R^3
-L = 1.6*2;
+L = 1.7*2;
 x = zeros(2,2*Bx,2*Bx,precision);
 for i = 1:2*Bx
     for j = 1:2*Bx
