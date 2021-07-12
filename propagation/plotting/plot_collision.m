@@ -1,9 +1,9 @@
 function [  ] = plot_collision( path, sf, slow )
 
 % theta0
-dWall = 0.15;
+dWall = 0.12;
 h = 0.2;
-r = 0.05;
+r = 0.025;
 
 theta0 = asin(dWall/sqrt(h^2+r^2)) - asin(r/sqrt(h^2+r^2));
 

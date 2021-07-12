@@ -1,4 +1,4 @@
-function [ stat, MFG ] = pendulum_reduced_hybrid( path, method, getc )
+function [ stat, MFG ] = pendulum_reduced_hybrid( path, method, getc, f0 )
 
 addpath('../rotation3d');
 addpath('../matrix Fisher');
@@ -47,7 +47,7 @@ tscale = sqrt(J/(m*g*rho));
 
 % time
 sf = 400;
-T = 1;
+T = 4;
 Nt = T*sf+1;
 
 % scaled parameters
@@ -85,7 +85,7 @@ for i = 1:2*BR
 end
 
 % grid over R^3
-L = 1.6*2;
+L = 1.7*2;
 x = zeros(2,2*Bx,2*Bx);
 for i = 1:2*Bx
     for j = 1:2*Bx
@@ -168,30 +168,16 @@ Sigma = (2*tscale)^2*eye(2);
 
 c = pdf_MF_normal(diag(S));
 
-f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
-    permute(exp(sum(-0.5*permute((x-Miu),[1,4,2,3]).*permute((x-Miu),...
-    [4,1,2,3]).*Sigma^-1,[1,2])),[1,2,5,3,4])/c/sqrt((2*pi)^2*det(Sigma));
+if exist('f0','var') && ~isempty(f0)
+    f = f0;
+else
+    f = permute(exp(sum(U*S.*R,[1,2])),[3,4,5,1,2]).*...
+        permute(exp(sum(-0.5*permute((x-Miu),[1,4,2,3]).*permute((x-Miu),...
+        [4,1,2,3]).*Sigma^-1,[1,2])),[1,2,5,3,4])/c/sqrt((2*pi)^2*det(Sigma));
+end
 
 if saveToFile
     save(strcat(path,'/f1'),'f','-v7.3');
-end
-
-if getc
-    c = pendulum_plot_getc(f,e,L);
-    c = reshape(c,Nt1,Nt2,3);
-
-    c = c/max(c(:));
-    c1 = c(:,:,1);
-    c2 = c(:,:,2);
-    c3 = c(:,:,3);
-    c = ones(size(c));
-    c(:,:,1) = c(:,:,1)-c2-c3;
-    c(:,:,2) = c(:,:,2)-c1-c3;
-    c(:,:,3) = c(:,:,3)-c1-c2;
-
-    if saveToFile
-        save(strcat(path,'/c1'),'c');
-    end
 end
 
 % initial Fourier transform
@@ -213,7 +199,26 @@ ExvR = zeros(2,3,Nt);
 EvRvR = zeros(3,3,Nt);
 
 [ER(:,:,1),Ex(:,1),Varx(:,:,1),EvR(:,1),ExvR(:,:,1),EvRvR(:,:,1),...
-    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1)] = get_stat(f,R,x,w);
+    U(:,:,1),S(:,:,1),V(:,:,1),P(:,:,1),Miu(:,1),Sigma(:,:,1),fx] = get_stat(f,R,x,w);
+
+if getc
+    c = pendulum_plot_getc(f,e,L);
+    c = reshape(c,Nt1,Nt2,3);
+
+    c = c/max(c(:));
+    c1 = c(:,:,1);
+    c2 = c(:,:,2);
+    c3 = c(:,:,3);
+    c = ones(size(c));
+    c(:,:,1) = c(:,:,1)-c2-c3;
+    c(:,:,2) = c(:,:,2)-c1-c3;
+    c(:,:,3) = c(:,:,3)-c1-c2;
+
+    if saveToFile
+        save(strcat(path,'/c1'),'c');
+        save(strcat(path,'/fx1'),'fx');
+    end
+end
 
 %% propagation
 for nt = 1:Nt-1
@@ -230,7 +235,7 @@ for nt = 1:Nt-1
     
     % calculate statistics
     [ER(:,:,nt+1),Ex(:,nt+1),Varx(:,:,nt+1),EvR(:,nt+1),ExvR(:,:,nt+1),EvRvR(:,:,nt+1),...
-        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1)]...
+        U(:,:,nt+1),S(:,:,nt+1),V(:,:,nt+1),P(:,:,nt+1),Miu(:,nt+1),Sigma(:,:,nt+1),fx]...
         = get_stat(f,R,x,w);
     
     if getc
@@ -248,6 +253,7 @@ for nt = 1:Nt-1
         
         if saveToFile
             save(strcat(path,'/c',num2str(nt+1)),'c');
+            save(strcat(path,'/fx',num2str(nt+1)),'fx');
         end
     end
     
@@ -295,7 +301,7 @@ rmpath('discrete/mex');
 end
 
 
-function [ ER, Ex, Varx, EvR, ExvR, EvRvR, U, S, V, P, Miu, Sigma ] = get_stat( f, R, x, w )
+function [ ER, Ex, Varx, EvR, ExvR, EvRvR, U, S, V, P, Miu, Sigma, fx ] = get_stat( f, R, x, w )
 
 Bx = size(x,2)/2;
 L = x(1,end,1,1)+x(1,2,1,1)-2*x(1,1,1,1);
