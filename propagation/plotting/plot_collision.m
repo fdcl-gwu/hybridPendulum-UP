@@ -58,7 +58,7 @@ for nt = 1:Nt
     xlim([-1.2,1.2]);
     ylim([-1.2,1.2]);
     zlim([-1.2,1.2]);
-    view([-0.1,-1,-0.3]);
+    view([-0.1,1,-0.3]);
     axis equal;
     axis off;
 
