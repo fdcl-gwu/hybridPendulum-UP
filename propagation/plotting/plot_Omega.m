@@ -67,23 +67,32 @@ for nt = fnt'
             load(strcat(path,'/f',num2str(nt)),'f');
         end
         fx = permute(sum(f.*w,[1,2,3]),[4,5,1,2,3]);
+        save(strcat(path,'/fx',num2str(nt)),'fx');
     end
+    
+    fx(fx<0) = 0;
     
     fig = figure; hold on;
     surf(x,y,fx,'LineStyle','none');
-    zlim([-0.5,4.5]);
+    xlim([-1.7,1.7]);
+    ylim([-1.7,1.7]);
+    xticks([-1.7,0,1.7]);
+    yticks([-1.7,0,1.7]);
+    xticklabels({'-14.5','0','14.5'});
+    yticklabels({'-14.5','0','14.5'});
+    zlim([0,4.5]);
+    xlabel('$\Omega_2$ (deg/s)','Interpreter','latex','Position',[0.250,1.784,-0.442]);
+    ylabel('$\Omega_1$ (deg/s)','Interpreter','latex','Position',[1.831,0.203,-0.443]);
     view([1,1,1]);
     
     annotation('textbox','String',strcat('time: ',num2str((nt-1)/sf),' s'),...
         'Position',[0.13,0.78,0.22,0.07],'LineStyle','none');
     
+    title('Marginal angular velocity density');
+    
     N = N+1;
     M(N) = getframe(fig);
     close(fig);
-    
-    if ~have_fx
-        save(strcat(path,'/fx',num2str(nt)),'fx');
-    end
 end
 
 % generate video

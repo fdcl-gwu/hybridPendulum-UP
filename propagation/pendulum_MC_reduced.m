@@ -22,7 +22,7 @@ bt = b*tscale;
 
 % time
 sf = 400;
-T = 4;
+T = 8;
 Nt = T*sf+1;
 
 % scaled time
@@ -37,7 +37,7 @@ Ht = H*tscale^(3/2);
 % initial conditions
 if ~exist('R','var')
     S = diag([15,15,15]);
-    U = expRot([pi*2/3,0,0]);
+    U = expRot([0,-2*pi/3,0]);
     R = pdf_MF_sampling_gpu(U*S,Ns);
 end
 
