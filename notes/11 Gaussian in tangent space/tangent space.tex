@@ -1,0 +1,106 @@
+\documentclass[10pt]{article}
+
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{bm}
+\usepackage{graphicx,subcaption}
+\usepackage[letterpaper, top=1in, left=1in, right=1in, bottom=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+
+\newcommand{\SO}{\ensuremath{\mathrm{SO}(3)}}
+\newcommand{\tr}[1]{\ensuremath{\mathrm{tr}\left( #1 \right)}}
+\newcommand{\abs}[1]{\ensuremath{\left| #1 \right|}}
+\newcommand{\diff}[1]{\mathrm{d}#1}
+\newcommand{\vect}[1]{\ensuremath{\mathrm{vec}\left[ #1 \right]}}
+
+\newcommand{\liediff}{\mathfrak{d}}
+\newcommand{\dft}{\mathcal{F}}
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\sph}{\ensuremath{\mathbb{S}}}
+\newcommand{\diag}{\ensuremath{\mathrm{diag}}}
+
+\newcommand{\expb}[1]{\ensuremath{\exp\left\{ #1 \right\}}}
+\newcommand{\norm}[1]{\ensuremath{\left\| #1 \right\|}}
+
+\title{Normal Distribution in Tangent Space}
+\date{}
+
+\begin{document}
+	
+\maketitle
+
+\section{Continuous}
+
+The dynamics of a 3D pendulum is
+\begin{align*}
+	R^T\diff{R} &= \hat{\Omega}\diff{t} \\
+	J\diff{\Omega} &= \left( -\Omega\times J\Omega - mg\rho\times R^Te_3 - JB\Omega \right) \diff{t} + JH\diff{W}_t.
+\end{align*}
+After assuming that the pendulum does not rotate about its axial axis, the dynamics can be simplified as
+\begin{align*}
+	R^T\diff{R} &= \left( \begin{bmatrix} \Omega_1 & \Omega_2 & 0 \end{bmatrix}^T \right)^\wedge \diff{t} \\
+	\diff{\begin{bmatrix} \Omega_1 \\ \Omega_2 \end{bmatrix}} &= \left( \frac{mg\rho_z}{J_1} \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} - \begin{bmatrix} b_1\Omega_1 \\ b_2\Omega_2 \end{bmatrix} \right) \diff{t} + H\diff{W}_t.
+\end{align*}
+After scaling the time, the dynamics becomes
+\begin{align*}
+	R^T\diff{R} &= \left( \begin{bmatrix} \tilde{\Omega}_1 & \tilde{\Omega}_2 & 0 \end{bmatrix}^T \right)^\vee \diff{\tilde{t}} \\
+	\diff{\begin{bmatrix} \tilde{\Omega}_1 \\ \tilde{\Omega}_2 \end{bmatrix}} &= \left( \begin{bmatrix} R_{32} \\ -R_{31} \end{bmatrix} - \begin{bmatrix} \tilde{b}_1\tilde{\Omega}_1 \\ \tilde{b}_2\tilde{\Omega}_2 \end{bmatrix} \right) \diff{\tilde{t}} + \tilde{H}\diff{W_{\tilde{t}}}.
+\end{align*}
+
+Now we want to model the uncertainty of error state, i.e. $R(t) = R^0(t)\exp\left( \delta\hat{\theta}(t) \right)$, and $\Omega(t) = \Omega^0(t) + \delta\Omega(t)$.
+For attitude, we have
+\begin{align*}
+	R^0(t+\Delta t) \expb{\delta\hat{\theta}(t+\Delta t)} = R^0(t) \expb{\delta\hat{\theta}(t)} \expb{\left( \Omega^0(t)+\delta\Omega(t) \right)^\wedge \Delta t}.
+\end{align*}
+Let $R^0(t+\Delta t) = R^0(t) \expb{\Omega^0(t) \Delta t}$, then
+\begin{align*}
+	R^0(t) \expb{\hat{\Omega}^0(t) \Delta t} \expb{\delta\hat{\theta}(t+\Delta t)} = R^0(t) \expb{\delta\hat{\theta}(t)} \expb{\left( \Omega^0(t)+\delta\Omega(t) \right)^\wedge \Delta t}.
+\end{align*}
+After rearranging the terms, we get
+\begin{align*}
+	\expb{\delta\hat{\theta}(t+\Delta t)} &= \expb{\hat{\Omega}^0(t) \Delta t}^T \expb{\delta\hat{\theta}(t)} \expb{\left( \Omega^0(t)+\delta\Omega(t) \right)^\wedge \Delta t} \\
+	&= \expb{\left( \expb{\hat{\Omega}^0(t) \Delta t}^T \delta\theta(t) \right)^\wedge} \expb{\hat{\Omega}^0(t) \Delta t}^T \expb{\left( \Omega^0(t)+\delta\Omega(t) \right)^\wedge \Delta t} \\
+	&= \expb{\left( \expb{\hat{\Omega}^0(t) \Delta t}^T \delta\theta(t) \right)^\wedge} + \expb{\delta\hat{\Omega}(t) \Delta t + O(\Delta t^2)} \\
+	&= \expb{\left( \expb{\hat{\Omega}^0(t) \Delta t}^T \delta\theta(t) \right)^\wedge + \delta\hat{\Omega}(t)\Delta t + O(\Delta t^2, \norm{\delta\theta(t)} \norm{\delta\Omega} \Delta t)}.
+\end{align*}
+And finally we get
+\begin{align*}
+	\delta\theta(t+\Delta t) = \expb{\hat{\Omega}^0(t) \Delta t}^T \delta\theta(t) + \delta\Omega(t)\Delta t + O\left( \Delta t^2, \norm{\delta\theta(t)} \norm{\delta\Omega} \Delta t \right).
+\end{align*}
+Let $t = \alpha\tilde{t}$, $\Omega = \tfrac{1}{\alpha} \tilde{\Omega}$, then
+\begin{align}
+	\delta\theta(t+\Delta \tilde{t}) = \expb{\hat{\tilde{\Omega}}^0(t) \Delta \tilde{t}}^T \delta\theta(t) + \delta\tilde{\Omega}(t)\Delta \tilde{t} + O\left( \Delta \tilde{t}^2, \norm{\delta\theta(t)} \norm{\delta\tilde{\Omega}(t)} \Delta \tilde{t} \right)
+\end{align}
+
+For angular velocity, we have
+\begin{align*}
+	J \left( \Omega^0(t+\Delta t) + \delta\Omega(t+\Delta t) \right) = &J\left(\Omega^0(t) + \delta \Omega(t)\right) -mg\rho\times \left( R^0(t) \expb{\delta\hat{\theta}(t)} \right)^Te_3 \Delta t \\
+	&- JB\left( \Omega^0(t) + \delta\Omega(t) \right) \Delta t + JH\Delta W_t.
+\end{align*}
+Let $J\Omega^0(t+\Delta t) = J\Omega^0(t) -mg\rho\times R^0(t)^Te_3 \Delta t - B\Omega^0(t) \Delta t$, then after rearranging the terms, we get
+\begin{align*}
+	J\delta\Omega(t+\Delta t) &= J\delta\Omega(t) -mg\rho \times \left( R^0(t) - R^0(t)\expb{\delta\hat{\theta}(t)} \right)^Te_3 \Delta t - JB\delta\Omega(t) \Delta t + JH\Delta W_t \\
+	&= J\delta\Omega(t) -mg\rho \times \left( R^0(t)\delta\hat{\theta}(t) \right)^T e_3 \Delta t - JB\delta\Omega(t) \Delta t + JH\Delta W_t + O\left( \norm{\delta\theta(t)}^2 \Delta t \right) 
+\end{align*}
+Note that
+\begin{align*}
+	\rho \times \left( R^0(t)\delta\hat{\theta}(t) \right)^T e_3 = \hat{\rho} \left( -\delta\hat{\theta}(t) R^0(t)^Te_3 \right) = \hat{\rho} \left( R^0(t)^Te_3 \right)^\wedge \delta\theta(t).
+\end{align*}
+From the above, the simplified linearized dynamics becomes
+\begin{align*}
+	\begin{bmatrix} \delta\Omega_1(t+\Delta t) \\ \delta\Omega_2(t+\Delta t) \end{bmatrix} = \begin{bmatrix} \delta\Omega_1(t) \\ \delta\Omega_2(t) \end{bmatrix} + \frac{mg\rho_z \Delta t}{J_1} \begin{bmatrix} R_{33}^0(t) & 0 & -R_{31}^0(t) \\ 0 & R_{33}^0(t) & -R_{32}^0(t) \end{bmatrix} \delta\theta(t) - \Delta t \begin{bmatrix} b_1 & 0 \\ 0 & b_2 \end{bmatrix} \begin{bmatrix} \delta\Omega_1(t) \\ \delta\Omega_2(t) \end{bmatrix} + H\Delta W_t
+\end{align*}
+After scaling we have
+\begin{align*}
+	\begin{bmatrix} \delta\tilde{\Omega}_1(t+\Delta \tilde{t}) \\ \delta\tilde{\Omega}_2(t+\Delta \tilde{t}) \end{bmatrix} = \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} + \frac{\alpha^2 mg\rho_z \Delta \tilde{t}}{J_1} \begin{bmatrix} R_{33}^0(t) & 0 & -R_{31}^0(t) \\ 0 & R_{33}^0(t) & -R_{32}^0(t) \end{bmatrix} \delta\theta(t) - \alpha \Delta\tilde{t} \begin{bmatrix} b_1 & 0 \\ 0 & b_2 \end{bmatrix} \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} + \alpha^{3/2} H \Delta W_{\tilde{t}}.
+\end{align*}
+Let $\alpha^2 = \tfrac{J_1}{mg\rho_z}$, $\tilde{B} = \alpha B$, and $\tilde{H} = \alpha^{3/2}H$, we have
+\begin{align}
+	\begin{bmatrix} \delta\tilde{\Omega}_1(t+\Delta \tilde{t}) \\ \delta\tilde{\Omega}_2(t+\Delta \tilde{t}) \end{bmatrix} = \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} + \begin{bmatrix} R_{33}^0(t) & 0 & -R_{31}^0(t) \\ 0 & R_{33}^0(t) & -R_{32}^0(t) \end{bmatrix} \delta\theta(t) \Delta\tilde{t} - \begin{bmatrix} \tilde{b}_1 & 0 \\ 0 & \tilde{b}_2 \end{bmatrix} \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} \Delta\tilde{t} + \tilde{H} \Delta W_{\tilde{t}}.
+\end{align}
+
+\end{document}
+
