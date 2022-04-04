@@ -102,5 +102,62 @@ Let $\alpha^2 = \tfrac{J_1}{mg\rho_z}$, $\tilde{B} = \alpha B$, and $\tilde{H} =
 	\begin{bmatrix} \delta\tilde{\Omega}_1(t+\Delta \tilde{t}) \\ \delta\tilde{\Omega}_2(t+\Delta \tilde{t}) \end{bmatrix} = \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} + \begin{bmatrix} R_{33}^0(t) & 0 & -R_{31}^0(t) \\ 0 & R_{33}^0(t) & -R_{32}^0(t) \end{bmatrix} \delta\theta(t) \Delta\tilde{t} - \begin{bmatrix} \tilde{b}_1 & 0 \\ 0 & \tilde{b}_2 \end{bmatrix} \begin{bmatrix} \delta\tilde{\Omega}_1(t) \\ \delta\tilde{\Omega}_2(t) \end{bmatrix} \Delta\tilde{t} + \tilde{H} \Delta W_{\tilde{t}}.
 \end{align}
 
+\section{Discrete}
+
+Suppose $(\delta\theta(t), \delta\tilde{\Omega}(t))$ follows a Gaussian mixture:
+\begin{align}
+	p\left(\delta\theta(t), \delta\tilde{\Omega}(t)\right) = \sum_{l=1}^{L(t)} w_l p_G\left(\delta\theta(t), \delta\tilde{\Omega}(t); \Sigma_{l}(t)\right).
+\end{align}
+The nominal state is denoted by $(R_l^0(t), \tilde{\Omega}_l^0(t))$ for mode $l$.
+
+\subsection{Splitting}
+
+For each mode $l$, let $p\left( R_l^0(t)\expb{\delta\hat{\theta}(t)}, \tilde{\Omega}(t) \right) = p\left(R(t),\tilde{\Omega}(t)\right)$ be its probability density function. After the discrete transition, it splits into two parts, given by
+\begin{align*}
+	p_{l1}\left( R(t),\tilde{\Omega}(t) \right) &= \Delta t \int_{\tilde{\Omega}^- \in \mathbb{R}^2} p\left( R(t), \tilde{\Omega}^- \right) \kappa_\Omega\left( R(t), \tilde{\Omega}^-, \tilde{\Omega}(t) \right) \lambda\left( R(t), \tilde{\Omega}^- \right) \diff{\tilde{\Omega}^-},
+\end{align*}
+and
+\begin{align*}
+	p_{l2}\left(R(t),\tilde{\Omega}(t)\right) = p\left(R(t),\tilde{\Omega}(t)\right) - \Delta t \lambda\left(R(t),\tilde{\Omega}(t)\right) p\left(R(t),\tilde{\Omega}(t)\right).
+\end{align*}
+
+\section{Continuous Formulation for Continuous Dynamics}
+
+Note that $\delta R = R\delta\hat{\theta}$, so we have
+\begin{align*}
+	\diff{\delta R} = \diff{R} \delta\hat{\theta} + R \diff{\delta\hat{\theta}} = R\hat{\Omega} \delta\hat{\theta} \diff{t} + R \diff{\delta\hat{\theta}}.
+\end{align*}
+From the continuous dynamics, we also have
+\begin{align*}
+	\diff{\delta R} = \left( \delta R\hat{\Omega} + R\delta\hat{\Omega} \right) \diff{t} = \left( R\delta\hat{\theta} \hat{\Omega} + R\delta\hat{\Omega} \right) \diff{t}.
+\end{align*}
+Combining the above two equations, we get
+\begin{align*}
+	\diff{\delta \hat{\theta}} = \left( \delta\hat{\theta}\hat{\Omega} - \hat{\Omega}\delta\hat{\theta} + \delta\hat{\Omega} \right) \diff{t} = \left( \left( \delta\theta \times \Omega \right)^\wedge + \delta\hat{\Omega} \right) \diff{t}.
+\end{align*}
+Thus
+\begin{align*}
+	\diff{\delta\theta} = \left( \delta\theta \times \Omega + \delta\Omega \right) \diff{t} = \left( -\hat{\Omega}\delta\theta + \delta\Omega \right) \diff{t}.
+\end{align*}
+And the scaled version becomes 
+\begin{align}
+	\diff{\delta\theta} = \left( -\hat{\tilde{\Omega}}\delta\theta + \delta\tilde{\Omega} \right) \diff{\tilde{t}}
+\end{align}
+
+Similarly, for angular velocity, we have
+\begin{align*}
+	J\diff{\delta\Omega} &= \left( -mg\rho\times \left( R\delta\hat{\theta} \right)^Te_3 - JB\delta\Omega \right) \diff{t} + JH\diff{W_t} \\
+	&= \left( mg\rho\times \delta\hat{\theta}R^Te_3 - JB\delta\Omega \right) \diff{t} + JH\diff{W_t} \\
+	&= \left( -mg \hat{\rho} \left(R^Te_3\right)^\wedge \delta\theta - JB\delta\Omega \right) \diff{t} + JH\diff{W_t}.
+\end{align*}
+After the simplification, we have
+\begin{align*}
+	\diff \begin{bmatrix} \delta\Omega_1 \\ \delta\Omega_2 \end{bmatrix} = \left( \frac{mg\rho_z}{J_1} \begin{bmatrix} R_{33} & 0 & -R_{31} \\ 0 & R_{33} & -R_{32} \end{bmatrix} \delta\theta - \begin{bmatrix} b_1 & 0 \\ 0 & b_2 \end{bmatrix} \begin{bmatrix} \delta\Omega_1 \\ \delta\Omega_2 \end{bmatrix} \right) \diff{t} + H\diff{W_t}.
+\end{align*}
+And after time scaling, it becomes
+\begin{align}
+	\diff \begin{bmatrix} \delta\tilde{\Omega}_1 \\ \delta\tilde{\Omega}_2 \end{bmatrix} = \left( \begin{bmatrix} R_{33} & 0 & -R_{31} \\ 0 & R_{33} & -R_{32} \end{bmatrix} \delta\theta - \begin{bmatrix} \tilde{b}_1 & 0 \\ 0 & \tilde{b}_2 \end{bmatrix} \begin{bmatrix} \delta\tilde{\Omega}_1 \\ \delta\tilde{\Omega}_2 \end{bmatrix} \right) \diff{\tilde{t}} + \tilde{H} \diff{W_{\tilde{t}}}
+\end{align}
+
 \end{document}
 
